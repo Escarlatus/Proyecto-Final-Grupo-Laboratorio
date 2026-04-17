@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* Enable class-based dark mode specifically for Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: #0F539C; /* Gov Primary */
+  --color-primary-hover: #0A3C72;
+  --color-primary-light: #9FD0FD; /* Gov Alt Claro */
+  --color-primary-medium: #66A1DE; /* Gov Alt Medio */
+  
+  --color-danger: #CE1126; /* Dominican Red */
+  --color-surface: oklch(0.99 0.01 250 / 0.8);
+  --color-surface-dark: oklch(0.15 0 0);
+  
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Outfit', sans-serif;
+  
+  /* Additional neutral colors */
+  --color-slate-50: oklch(0.98 0.01 240);
+  --color-slate-100: oklch(0.96 0.01 240);
+  --color-slate-800: oklch(0.25 0.02 240);
+  --color-slate-900: oklch(0.15 0.02 240);
+}
+
+:root {
+  background-color: #f8fafc; /* Fallback */
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+/* Base custom styles for scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: oklch(0.8 0.02 240);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.6 0.02 240);
+}
