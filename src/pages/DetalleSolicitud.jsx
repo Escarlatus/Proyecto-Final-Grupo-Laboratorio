@@ -46,6 +46,17 @@ export default function DetalleSolicitud() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("establecimiento")
 
+  const downloadFile = async (filePath, fileName) => {
+    const { data, error } = await supabase.storage
+      .from("solicitudes")
+      .createSignedUrl(filePath, 60) // URL válida por 60 segundos
+    if (error) { alert("No se pudo generar el enlace de descarga."); return }
+    const a = document.createElement("a")
+    a.href = data.signedUrl
+    a.download = fileName
+    a.click()
+  }
+
   useEffect(() => {
     const fetchAll = async () => {
       try {
@@ -88,13 +99,18 @@ export default function DetalleSolicitud() {
             dirStreet: dir.street_address, dirSector: dir.sector, dirCity: dir.city
           })
           
-          // Documents
-          const { data: docs } = await supabase.from("file_documents").select("*").eq("request_id", id);
+          // Documents — use applications_documents table (correct schema)
+          const { data: docs } = await supabase
+            .from("applications_documents")
+            .select("*")
+            .eq("request_id", id);
           if (docs) {
             setDocuments(docs.map(d => ({
               documentId: d.document_id,
               fileName: d.file_name,
-              fileSizeBytes: d.file_size_bytes,
+              filePath: d.file_path,
+              fileType: d.file_type,
+              fileSizeBytes: d.file_size_in_bytes,
               uploadedAt: d.uploaded_at
             })));
           }
@@ -278,7 +294,14 @@ export default function DetalleSolicitud() {
                           <p className="text-xs text-slate-500 dark:text-slate-400">{doc.fileType} · {(doc.fileSizeBytes / 1024).toFixed(0)} KB · {doc.uploadedAt}</p>
                         </div>
                       </div>
-                      <span className="text-xs px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full font-medium">Subido</span>
+                      <button
+                        onClick={() => downloadFile(doc.filePath, doc.fileName)}
+                        className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                        title="Descargar archivo"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Descargar
+                      </button>
                     </div>
                   ))}
                 </div>

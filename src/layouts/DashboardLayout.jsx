@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { Link, Outlet, useLocation } from "react-router-dom"
-import { LayoutDashboard, FilePlus2, Settings, Bell, Search, Hexagon, Moon, Sun, ClipboardList, Stamp, ListChecks } from "lucide-react"
+import { LayoutDashboard, FilePlus2, Settings, Bell, Hexagon, Moon, Sun, ClipboardList, Stamp, ListChecks } from "lucide-react"
 import { cn } from "../lib/utils"
 import { UserButton, useUser } from "@clerk/react"
 import CompletarPerfilModal from "../components/CompletarPerfilModal"
@@ -153,14 +153,7 @@ export default function DashboardLayout() {
         <header className="h-20 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-6 transition-colors duration-300">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#002D62] via-transparent to-[#CE1126] opacity-80"></div>
           
-          {/* Mobile Dark Mode Toggle */}
           <div className="flex items-center gap-4 text-slate-500 dark:text-slate-400 w-full md:w-auto">
-             <Search className="h-5 w-5 hidden md:block" />
-             <input 
-               type="text" 
-               placeholder="Buscar solicitudes..." 
-               className="bg-transparent border-none focus:outline-none text-sm w-full md:w-64 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-100"
-             />
           </div>
           
           <div className="flex items-center gap-4">

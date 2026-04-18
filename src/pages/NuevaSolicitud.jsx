@@ -23,25 +23,44 @@ export default function NuevaSolicitud() {
   const [currentStep, setCurrentStep] = useState(0)
   const [tipoTramite, setTipoTramite] = useState("apert")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState([]) // { file, name, size, uploaded, docId }
+  const [uploadedFiles, setUploadedFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [createdRequestId, setCreatedRequestId] = useState(null)
   const [signatureName, setSignatureName] = useState("")
   const [signatureDT, setSignatureDT] = useState("")
   const [isDragging, setIsDragging] = useState(false)
+  const [permitCategories, setPermitCategories] = useState([])
+  const [presentationForms, setPresentationForms] = useState([])
   const fileInputRef = useRef(null)
   const navigate = useNavigate()
   const { user } = useUser()
   const supabase = useSupabase()
 
   const [formData, setFormData] = useState({
-    estTradeName: "", estRNC: "", estStreetAddress: "", estSector: "", estCity: "", estMunicipality: "", estLongAddress: "", estPhoneFixed: "", estPhoneMobile: "", estEmail: "", estPermitCategoryId: 1, estPresentationFormId: 1,
+    estTradeName: "", estRNC: "", estStreetAddress: "", estSector: "", estCity: "", estMunicipality: "", estLongAddress: "", estPhoneFixed: "", estPhoneMobile: "", estEmail: "", estPermitCategoryId: null, estPresentationFormId: null,
     ownFirstName: "", ownLastName: "", ownEmail: "", ownDocumentType: "rnc", ownDocumentNumber: "", ownStreetAddress: "", ownSector: "", ownCity: "", ownMunicipality: "", ownLongAddress: "", ownPhoneFixed: "", ownPhoneMobile: "",
     dirFirstName: "", dirLastName: "", dirEmail: "", dirDocumentType: "cedula", dirDocumentNumber: "", dirProfession: "", dirExequaturNumber: "", dirExequaturDate: "", dirStreetAddress: "", dirSector: "", dirCity: "", dirMunicipality: "", dirLongAddress: "", dirPhoneFixed: "", dirPhoneMobile: "",
     applicantObservations: ""
   })
 
-  const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }))
+  // Load catalog options from Supabase on mount
+  React.useEffect(() => {
+    const loadCatalogs = async () => {
+      const [{ data: cats }, { data: forms }] = await Promise.all([
+        supabase.from("registry_permit_categories").select("category_id, category_name").order("category_id"),
+        supabase.from("registry_presentation_forms").select("form_id, form_name").order("form_id")
+      ])
+      if (cats && cats.length > 0) {
+        setPermitCategories(cats)
+        setFormData(prev => ({ ...prev, estPermitCategoryId: cats[0].category_id }))
+      }
+      if (forms && forms.length > 0) {
+        setPresentationForms(forms)
+        setFormData(prev => ({ ...prev, estPresentationFormId: forms[0].form_id }))
+      }
+    }
+    loadCatalogs()
+  }, [supabase])
 
   const handleDocChange = (field, type, value) => {
     let val = value.replace(/\D/g, "");
@@ -108,21 +127,45 @@ export default function NuevaSolicitud() {
   const removeFile = (index) => setUploadedFiles(prev => prev.filter((_, i) => i !== index))
 
   const uploadAllFiles = async (requestId) => {
-    // Para simplificar ahora mismo no haremos Storage de blobs físicos. 
-    // Crearemos los registros de metadatos en file_documents.
     if (uploadedFiles.length === 0) return
     setUploading(true)
-    try {
-      const documentsToInsert = uploadedFiles.map(f => ({
-         request_id: requestId,
-         file_name: f.name,
-         file_size_bytes: f.size,
-         content_type: f.file.type || 'application/octet-stream',
-         storage_path: `solicitudes/${requestId}/${f.name}`,
-         uploaded_by: null // handled by anon/user mapping
-      }))
-      await supabase.from("file_documents").insert(documentsToInsert);
-    } catch { /* non-critical */ }
+
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      const f = uploadedFiles[i]
+      const storagePath = `${requestId}/${Date.now()}_${f.name}`
+
+      try {
+        // 1. Upload the physical file to Supabase Storage (bucket: "solicitudes")
+        const { error: storageErr } = await supabase.storage
+          .from("solicitudes")
+          .upload(storagePath, f.file, {
+            contentType: f.file.type || "application/octet-stream",
+            upsert: false
+          })
+
+        if (storageErr) throw storageErr
+
+        // 2. Insert metadata record into applications_documents
+        await supabase.from("applications_documents").insert({
+          request_id: requestId,
+          file_name: f.name,
+          file_path: storagePath,
+          file_type: f.file.type || "application/octet-stream",
+          file_size_in_bytes: f.size
+        })
+
+        // Mark file as uploaded in UI
+        setUploadedFiles(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, uploaded: true, error: null } : item
+        ))
+      } catch (err) {
+        // Mark file as failed but don't block the whole submission
+        setUploadedFiles(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, uploaded: false, error: err.message } : item
+        ))
+      }
+    }
+
     setUploading(false)
   }
 
@@ -268,38 +311,20 @@ export default function NuevaSolicitud() {
                 </div>
                 
                 <div className="md:col-span-2">
-                  <Select 
+                   <Select 
                     label="Categoría del permiso de Habilitación:"
-                    value={formData.estPermitCategoryId}
+                    value={formData.estPermitCategoryId ?? ""}
                     onChange={e => handleChange("estPermitCategoryId", parseInt(e.target.value))}
-                    options={[
-                      { value: "fab_med", label: "Fabricante de Medicamentos" },
-                      { value: "prod_nat", label: "Productos Naturales" },
-                      { value: "prod_san", label: "Productos Sanitarios" },
-                      { value: "fab_cos", label: "Fabricante de Cosméticos" },
-                      { value: "hig_per", label: "Higiene personal" },
-                      { value: "hig_hog", label: "Higiene del Hogar" },
-                      { value: "cen_nut", label: "Centro Prep. Mezclas Nutrición Parenteral" },
-                      { value: "aco_1rio", label: "Acondicionador 1rio de Medicamentos" },
-                      { value: "fab_bio", label: "Fabricante de biológicos" },
-                      { value: "fab_mat", label: "Fabricante de Materia Prima" },
-                    ]}
+                    options={permitCategories.map(c => ({ value: c.category_id, label: c.category_name }))}
                   />
                 </div>
                 
                 <div className="md:col-span-2">
                   <Select 
                     label="Forma de presentación del producto a elaborar:"
-                    value={formData.estPresentationFormId}
+                    value={formData.estPresentationFormId ?? ""}
                     onChange={e => handleChange("estPresentationFormId", parseInt(e.target.value))}
-                    options={[
-                      { value: 1, label: "Sólidos" },
-                      { value: 2, label: "Semisólidos" },
-                      { value: 3, label: "Líquidos" },
-                      { value: 4, label: "Líquidos orales" },
-                      { value: 5, label: "Estériles Inyectables/Parenterales" },
-                      { value: 6, label: "Estériles no Inyectables" },
-                    ]}
+                    options={presentationForms.map(f => ({ value: f.form_id, label: f.form_name }))}
                   />
                 </div>
               </div>
