@@ -190,10 +190,10 @@ export default function NuevaSolicitud() {
         .from("identity_users").select("user_id").eq("clerk_user_id", user.id).single()
       if (userErr || !dbUser) throw new Error("Usuario no sincronizado con la base de datos.")
 
-      // 2. Insertar Establecimiento
+      // 2. Upsert Establecimiento por RNC único
       const { data: estData, error: estErr } = await supabase
         .from("registry_establishments")
-        .insert({
+        .upsert({
           trade_name: safe.estTradeName, rnc: safe.estRNC,
           street_address: safe.estStreetAddress, sector: safe.estSector,
           city: safe.estCity, municipality: safe.estMunicipality,
@@ -201,49 +201,83 @@ export default function NuevaSolicitud() {
           phone_mobile: safe.estPhoneMobile, email: safe.estEmail,
           permit_category_id: formData.estPermitCategoryId,
           presentation_form_id: formData.estPresentationFormId
-        }).select("establishment_id").single()
+        }, { onConflict: 'rnc' })
+        .select("establishment_id")
+        .single()
       if (estErr) throw new Error("Error al guardar establecimiento: " + estErr.message)
 
-      // 3a. Crear persona del propietario
-      const { data: ownPerson, error: ownPersonErr } = await supabase
+      // 3a. Find-or-create persona del propietario por número de documento
+      let ownPersonId = null
+      const { data: existingOwnPerson } = await supabase
         .from("identity_persons")
-        .insert({
-          first_name: safe.ownFirstName, last_name: safe.ownLastName,
-          document_type: safe.ownDocumentType, document_number: safe.ownDocumentNumber,
-          email: safe.ownEmail || ("owner-" + Date.now() + "@noemail.com"),
-          phone_fixed: safe.ownPhoneFixed, phone_mobile: safe.ownPhoneMobile
-        }).select("person_id").single()
-      if (ownPersonErr) throw new Error("Error al guardar persona del propietario: " + ownPersonErr.message)
+        .select("person_id")
+        .eq("document_type", safe.ownDocumentType)
+        .eq("document_number", safe.ownDocumentNumber)
+        .maybeSingle()
 
-      // 3b. Crear propietario con person_id
-      const { data: ownData, error: ownErr } = await supabase
-        .from("registry_owners")
-        .insert({
-          person_id: ownPerson.person_id,
-          street_address: safe.ownStreetAddress || "N/A",
-          sector: safe.ownSector || "N/A",
-          city: safe.ownCity || "N/A",
-          municipality: safe.ownMunicipality || "N/A",
-          long_address: safe.ownLongAddress
-        }).select("owner_id").single()
-      if (ownErr) throw new Error("Error al guardar propietario: " + ownErr.message)
+      if (existingOwnPerson) {
+        ownPersonId = existingOwnPerson.person_id
+      } else {
+        const ownEmail = safe.ownEmail || ("owner-" + safe.ownDocumentNumber.replace(/\D/g, '') + "@noemail.com")
+        const { data: newOwnPerson, error: ownPersonErr } = await supabase
+          .from("identity_persons")
+          .insert({
+            first_name: safe.ownFirstName, last_name: safe.ownLastName,
+            document_type: safe.ownDocumentType, document_number: safe.ownDocumentNumber,
+            email: ownEmail, phone_fixed: safe.ownPhoneFixed, phone_mobile: safe.ownPhoneMobile
+          }).select("person_id").single()
+        if (ownPersonErr) throw new Error("Error al guardar propietario: " + ownPersonErr.message)
+        ownPersonId = newOwnPerson.person_id
+      }
 
-      // 4a. Crear persona del director técnico
-      const { data: dirPerson, error: dirPersonErr } = await supabase
+      // 3b. Find-or-create owner record
+      const { data: existingOwner } = await supabase
+        .from("registry_owners").select("owner_id").eq("person_id", ownPersonId).maybeSingle()
+      let ownerId = existingOwner?.owner_id
+      if (!ownerId) {
+        const { data: newOwner, error: ownErr } = await supabase
+          .from("registry_owners")
+          .insert({
+            person_id: ownPersonId,
+            street_address: safe.ownStreetAddress || "N/A",
+            sector: safe.ownSector || "N/A",
+            city: safe.ownCity || "N/A",
+            municipality: safe.ownMunicipality || "N/A",
+            long_address: safe.ownLongAddress
+          }).select("owner_id").single()
+        if (ownErr) throw new Error("Error al registrar propietario: " + ownErr.message)
+        ownerId = newOwner.owner_id
+      }
+
+      // 4a. Find-or-create persona del director técnico
+      let dirPersonId = null
+      const { data: existingDirPerson } = await supabase
         .from("identity_persons")
-        .insert({
-          first_name: safe.dirFirstName, last_name: safe.dirLastName,
-          document_type: safe.dirDocumentType, document_number: safe.dirDocumentNumber,
-          email: safe.dirEmail || ("dir-" + Date.now() + "@noemail.com"),
-          phone_fixed: safe.dirPhoneFixed, phone_mobile: safe.dirPhoneMobile
-        }).select("person_id").single()
-      if (dirPersonErr) throw new Error("Error al guardar persona del director: " + dirPersonErr.message)
+        .select("person_id")
+        .eq("document_type", safe.dirDocumentType)
+        .eq("document_number", safe.dirDocumentNumber)
+        .maybeSingle()
 
-      // 4b. Crear director técnico con person_id
+      if (existingDirPerson) {
+        dirPersonId = existingDirPerson.person_id
+      } else {
+        const dirEmail = safe.dirEmail || ("dir-" + safe.dirDocumentNumber.replace(/\D/g, '') + "@noemail.com")
+        const { data: newDirPerson, error: dirPersonErr } = await supabase
+          .from("identity_persons")
+          .insert({
+            first_name: safe.dirFirstName, last_name: safe.dirLastName,
+            document_type: safe.dirDocumentType, document_number: safe.dirDocumentNumber,
+            email: dirEmail, phone_fixed: safe.dirPhoneFixed, phone_mobile: safe.dirPhoneMobile
+          }).select("person_id").single()
+        if (dirPersonErr) throw new Error("Error al guardar director técnico: " + dirPersonErr.message)
+        dirPersonId = newDirPerson.person_id
+      }
+
+      // 4b. Find-or-create director record (upsert on exequatur_number)
       const { data: dirData, error: dirErr } = await supabase
         .from("registry_technical_directors")
-        .insert({
-          person_id: dirPerson.person_id,
+        .upsert({
+          person_id: dirPersonId,
           profession: safe.dirProfession || "N/A",
           exequatur_number: safe.dirExequaturNumber,
           exequatur_date: formData.dirExequaturDate || new Date().toISOString().split("T")[0],
@@ -252,8 +286,10 @@ export default function NuevaSolicitud() {
           city: safe.dirCity || "N/A",
           municipality: safe.dirMunicipality || "N/A",
           long_address: safe.dirLongAddress
-        }).select("director_id").single()
-      if (dirErr) throw new Error("Error al guardar director técnico: " + dirErr.message)
+        }, { onConflict: 'exequatur_number' })
+        .select("director_id")
+        .single()
+      if (dirErr) throw new Error("Error al registrar director técnico: " + dirErr.message)
 
       // 5. Insertar solicitud — request_number es GENERATED ALWAYS, no se inserta
       const { data: reqData, error: reqErr } = await supabase
@@ -262,7 +298,7 @@ export default function NuevaSolicitud() {
           applicant_user_id: dbUser.user_id,
           request_type_id: requestTypeIds[tipoTramite] || 1,
           establishment_id: estData.establishment_id,
-          owner_id: ownData.owner_id,
+          owner_id: ownerId,
           director_id: dirData.director_id,
           status_id: 1,
           applicant_observations: safe.applicantObservations,
@@ -274,7 +310,7 @@ export default function NuevaSolicitud() {
       setCreatedRequestId(newId)
       if (uploadedFiles.length > 0) await uploadAllFiles(newId)
 
-      alert("Solicitud enviada. Código: " + reqData.request_number)
+      alert("¡Solicitud enviada! Código: " + reqData.request_number)
       navigate("/app/mis-solicitudes")
     } catch (e) {
       alert("Error al guardar: " + e.message)
