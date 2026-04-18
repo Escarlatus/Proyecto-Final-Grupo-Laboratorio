@@ -178,69 +178,102 @@ export default function NuevaSolicitud() {
     }
     setIsSubmitting(true)
     try {
-      // --- SANITIZAR todos los campos de texto antes de guardar ---
       const safe = sanitizeForm(formData)
-      const requestTypeIds = { apert: 1, tras: 2, renov: 3, cam_propietario: 4, cam_raz_social: 5, cam_actividad: 6, cam_nom: 7, nueva_area: 8 };
-      
-      // 1. Obtener mi ID de usuario
-      const { data: dbUser } = await supabase.from("identity_users").select("user_id").eq("clerk_user_id", user.id).single();
-      if (!dbUser) throw new Error("Usuario no sincronizado con base de datos.");
+      const requestTypeIds = { apert: 1, tras: 2, renov: 3, cam_propietario: 4, cam_raz_social: 5, cam_actividad: 6, cam_nom: 7, nueva_area: 8 }
+
+      // 1. Obtener user_id del solicitante
+      const { data: dbUser, error: userErr } = await supabase
+        .from("identity_users").select("user_id").eq("clerk_user_id", user.id).single()
+      if (userErr || !dbUser) throw new Error("Usuario no sincronizado con la base de datos.")
 
       // 2. Insertar Establecimiento
-      const { data: estData, error: estErr } = await supabase.from("registry_establishments").insert({
-        trade_name: safe.estTradeName, rnc: safe.estRNC, 
-        street_address: safe.estStreetAddress, sector: safe.estSector,
-        city: safe.estCity, municipality: safe.estMunicipality,
-        long_address: safe.estLongAddress, phone_fixed: safe.estPhoneFixed,
-        phone_mobile: safe.estPhoneMobile, email: safe.estEmail,
-        permit_category_id: formData.estPermitCategoryId, presentation_form_id: formData.estPresentationFormId
-      }).select("establishment_id").single();
-      if (estErr) throw estErr;
+      const { data: estData, error: estErr } = await supabase
+        .from("registry_establishments")
+        .insert({
+          trade_name: safe.estTradeName, rnc: safe.estRNC,
+          street_address: safe.estStreetAddress, sector: safe.estSector,
+          city: safe.estCity, municipality: safe.estMunicipality,
+          long_address: safe.estLongAddress, phone_fixed: safe.estPhoneFixed,
+          phone_mobile: safe.estPhoneMobile, email: safe.estEmail,
+          permit_category_id: formData.estPermitCategoryId,
+          presentation_form_id: formData.estPresentationFormId
+        }).select("establishment_id").single()
+      if (estErr) throw new Error("Error al guardar establecimiento: " + estErr.message)
 
-      // 3. Insertar Propietario
-      const { data: ownData, error: ownErr } = await supabase.from("registry_owners").insert({
-        first_name: safe.ownFirstName, last_name: safe.ownLastName,
-        document_type: safe.ownDocumentType, document_number: safe.ownDocumentNumber,
-        email: safe.ownEmail, phone_fixed: safe.ownPhoneFixed, phone_mobile: safe.ownPhoneMobile,
-        street_address: safe.ownStreetAddress, sector: safe.ownSector,
-        city: safe.ownCity, municipality: safe.ownMunicipality
-      }).select("owner_id").single();
-      if (ownErr) throw ownErr;
+      // 3a. Crear persona del propietario
+      const { data: ownPerson, error: ownPersonErr } = await supabase
+        .from("identity_persons")
+        .insert({
+          first_name: safe.ownFirstName, last_name: safe.ownLastName,
+          document_type: safe.ownDocumentType, document_number: safe.ownDocumentNumber,
+          email: safe.ownEmail || ("owner-" + Date.now() + "@noemail.com"),
+          phone_fixed: safe.ownPhoneFixed, phone_mobile: safe.ownPhoneMobile
+        }).select("person_id").single()
+      if (ownPersonErr) throw new Error("Error al guardar persona del propietario: " + ownPersonErr.message)
 
-      // 4. Insertar Director Tecnico
-      const { data: dirData, error: dirErr } = await supabase.from("registry_technical_directors").insert({
-        first_name: safe.dirFirstName, last_name: safe.dirLastName,
-        profession: safe.dirProfession, document_type: safe.dirDocumentType,
-        document_number: safe.dirDocumentNumber, exequatur_number: safe.dirExequaturNumber,
-        exequatur_date: formData.dirExequaturDate ? new Date(formData.dirExequaturDate).toISOString() : null,
-        email: safe.dirEmail, phone_fixed: safe.dirPhoneFixed, phone_mobile: safe.dirPhoneMobile,
-        street_address: safe.dirStreetAddress, sector: safe.dirSector, city: safe.dirCity
-      }).select("director_id").single();
-      if (dirErr) throw dirErr;
+      // 3b. Crear propietario con person_id
+      const { data: ownData, error: ownErr } = await supabase
+        .from("registry_owners")
+        .insert({
+          person_id: ownPerson.person_id,
+          street_address: safe.ownStreetAddress || "N/A",
+          sector: safe.ownSector || "N/A",
+          city: safe.ownCity || "N/A",
+          municipality: safe.ownMunicipality || "N/A",
+          long_address: safe.ownLongAddress
+        }).select("owner_id").single()
+      if (ownErr) throw new Error("Error al guardar propietario: " + ownErr.message)
 
-      // 5. Insertar Solicitud
-      const requestNumber = "REQ-" + Math.floor(100000 + Math.random() * 900000);
-      const { data: reqData, error: reqErr } = await supabase.from("applications_requests").insert({
-        request_number: requestNumber,
-        applicant_user_id: dbUser.user_id,
-        request_type_id: requestTypeIds[tipoTramite] || 1,
-        establishment_id: estData.establishment_id,
-        owner_id: ownData.owner_id,
-        director_id: dirData.director_id,
-        status_id: 1, // Borrador
-        applicant_observations: formData.applicantObservations
-      }).select("request_id").single();
-      if (reqErr) throw reqErr;
+      // 4a. Crear persona del director técnico
+      const { data: dirPerson, error: dirPersonErr } = await supabase
+        .from("identity_persons")
+        .insert({
+          first_name: safe.dirFirstName, last_name: safe.dirLastName,
+          document_type: safe.dirDocumentType, document_number: safe.dirDocumentNumber,
+          email: safe.dirEmail || ("dir-" + Date.now() + "@noemail.com"),
+          phone_fixed: safe.dirPhoneFixed, phone_mobile: safe.dirPhoneMobile
+        }).select("person_id").single()
+      if (dirPersonErr) throw new Error("Error al guardar persona del director: " + dirPersonErr.message)
 
-      const newId = reqData.request_id;
+      // 4b. Crear director técnico con person_id
+      const { data: dirData, error: dirErr } = await supabase
+        .from("registry_technical_directors")
+        .insert({
+          person_id: dirPerson.person_id,
+          profession: safe.dirProfession || "N/A",
+          exequatur_number: safe.dirExequaturNumber,
+          exequatur_date: formData.dirExequaturDate || new Date().toISOString().split("T")[0],
+          street_address: safe.dirStreetAddress || "N/A",
+          sector: safe.dirSector || "N/A",
+          city: safe.dirCity || "N/A",
+          municipality: safe.dirMunicipality || "N/A",
+          long_address: safe.dirLongAddress
+        }).select("director_id").single()
+      if (dirErr) throw new Error("Error al guardar director técnico: " + dirErr.message)
+
+      // 5. Insertar solicitud — request_number es GENERATED ALWAYS, no se inserta
+      const { data: reqData, error: reqErr } = await supabase
+        .from("applications_requests")
+        .insert({
+          applicant_user_id: dbUser.user_id,
+          request_type_id: requestTypeIds[tipoTramite] || 1,
+          establishment_id: estData.establishment_id,
+          owner_id: ownData.owner_id,
+          director_id: dirData.director_id,
+          status_id: 1,
+          applicant_observations: safe.applicantObservations,
+          digital_signature_date: new Date().toISOString()
+        }).select("request_id, request_number").single()
+      if (reqErr) throw new Error("Error al guardar solicitud: " + reqErr.message)
+
+      const newId = reqData.request_id
       setCreatedRequestId(newId)
-      
       if (uploadedFiles.length > 0) await uploadAllFiles(newId)
-      
-      alert("¡Solicitud enviada correctamente! El expediente ha sido registrado en el sistema con código " + requestNumber)
-      navigate("/app")
+
+      alert("Solicitud enviada. Código: " + reqData.request_number)
+      navigate("/app/mis-solicitudes")
     } catch (e) {
-      alert("Error en el sistema al guardar: " + e.message)
+      alert("Error al guardar: " + e.message)
     }
     setIsSubmitting(false)
   }
