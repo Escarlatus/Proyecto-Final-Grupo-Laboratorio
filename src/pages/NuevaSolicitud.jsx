@@ -468,12 +468,6 @@ export default function NuevaSolicitud() {
                 <div className="md:col-span-4">
                   <Input label="Correo de contacto" type="email" value={formData.dirEmail} onChange={e => handleChange("dirEmail", e.target.value)} />
                 </div>
-                <div className="md:col-span-2">
-                  <Input label="Teléfono Fijo de contacto" value={formData.dirPhoneFixed} onChange={e => handleChange("dirPhoneFixed", e.target.value)} />
-                </div>
-                <div className="md:col-span-2">
-                  <Input label="Teléfono Celular de contacto" value={formData.dirPhoneMobile} onChange={e => handleChange("dirPhoneMobile", e.target.value)} />
-                </div>
               </div>
             </div>
           )}
