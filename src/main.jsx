@@ -4,9 +4,15 @@ import App from './App.jsx'
 import './index.css'
 import { ClerkProvider } from "@clerk/react"
 
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+if (!clerkPubKey) {
+  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY environment variable')
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ClerkProvider afterSignOutUrl="/">
+    <ClerkProvider publishableKey={clerkPubKey} afterSignOutUrl="/">
       <App />
     </ClerkProvider>
   </React.StrictMode>,

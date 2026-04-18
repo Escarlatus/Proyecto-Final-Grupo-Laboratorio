@@ -68,12 +68,12 @@ export default function Configuracion() {
         const [{ data: reqTypes }, { data: permCats }, { data: presForms }] = await Promise.all([
           supabase.from("applications_request_types").select("*"),
           supabase.from("registry_permit_categories").select("*"),
-          supabase.from("applications_presentation_forms").select("*")
+          supabase.from("registry_presentation_forms").select("*")
         ])
         
         if (reqTypes) setRequestTypes(reqTypes.map(rt => ({ id: rt.request_type_id, name: rt.type_name })));
-        if (permCats) setPermitCategories(permCats.map(pc => ({ id: pc.permit_category_id, name: pc.category_name })));
-        if (presForms) setPresentationForms(presForms.map(pf => ({ id: pf.presentation_form_id, name: pf.form_name })));
+        if (permCats) setPermitCategories(permCats.map(pc => ({ id: pc.category_id, name: pc.category_name })));
+        if (presForms) setPresentationForms(presForms.map(pf => ({ id: pf.form_id, name: pf.form_name })));
       } catch (err) { console.error("Error catálogos:", err) }
     }
 
@@ -302,14 +302,14 @@ export default function Configuracion() {
 
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {isLoadingUsers ? (
-                          <tr><td colSpan="4" className="text-center py-8 text-slate-500 dark:text-slate-400">Cargando usuarios desde MS SQL Server...</td></tr>
+                          <tr><td colSpan="4" className="text-center py-8 text-slate-500 dark:text-slate-400">Cargando usuarios...</td></tr>
                         ) : usersDb.length === 0 ? (
                           <tr><td colSpan="4" className="text-center py-8 text-slate-500 dark:text-slate-400">No hay usuarios dados de alta.</td></tr>
                         ) : usersDb.map((user) => (
                           <tr key={user.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
                             <td className="px-6 py-4">
-                              <p className="font-medium text-slate-900 dark:text-slate-100">{user.nombre}</p>
-                              <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">{user.correo}</p>
+                              <p className="font-medium text-slate-900 dark:text-slate-100">{user.firstName} {user.lastName}</p>
+                              <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">{user.email}</p>
                             </td>
                             <td className="px-6 py-4 text-center">
                               <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-100/50 text-indigo-700 dark:bg-indigo-900/20 dark:border-indigo-800/50 dark:text-indigo-400 text-xs font-semibold">
@@ -352,7 +352,7 @@ export default function Configuracion() {
                       <div>
                         <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Usuario seleccionado</p>
                         <p className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mt-1">
-                          {userToEdit?.nombre} <span className="text-sm font-normal text-slate-500">({userToEdit?.correo})</span>
+                          {userToEdit?.firstName} {userToEdit?.lastName} <span className="text-sm font-normal text-slate-500">({userToEdit?.email})</span>
                         </p>
                       </div>
                       <div className="space-y-2">
@@ -407,7 +407,7 @@ export default function Configuracion() {
                   </div>
                   <div className="p-2 h-[320px] overflow-y-auto">
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {requestTypes.length === 0 && <li className="text-slate-500 dark:text-slate-400 text-sm p-4 text-center">Cargando desde SQL Server...</li>}
+                      {requestTypes.length === 0 && <li className="text-slate-500 dark:text-slate-400 text-sm p-4 text-center">Sin datos. Añade el primer tipo.</li>}
                       {requestTypes.map((item) => (
                         <li key={item.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg group transition-colors">
                           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{item.name}</span>
@@ -440,7 +440,7 @@ export default function Configuracion() {
                   </div>
                   <div className="p-2 h-[320px] overflow-y-auto">
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {permitCategories.length === 0 && <li className="text-slate-500 dark:text-slate-400 text-sm p-4 text-center">Cargando desde SQL Server...</li>}
+                      {permitCategories.length === 0 && <li className="text-slate-500 dark:text-slate-400 text-sm p-4 text-center">Sin datos. Añade la primera categoría.</li>}
                       {permitCategories.map((item) => (
                         <li key={item.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg group transition-colors">
                           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{item.name}</span>
@@ -473,7 +473,7 @@ export default function Configuracion() {
                   </div>
                   <div className="p-2 h-[320px] overflow-y-auto">
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {presentationForms.length === 0 && <li className="text-slate-500 dark:text-slate-400 text-sm p-4 text-center">Cargando desde SQL Server...</li>}
+                      {presentationForms.length === 0 && <li className="text-slate-500 dark:text-slate-400 text-sm p-4 text-center">Sin datos. Añade la primera forma.</li>}
                       {presentationForms.map((item) => (
                         <li key={item.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg group transition-colors">
                           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{item.name}</span>
