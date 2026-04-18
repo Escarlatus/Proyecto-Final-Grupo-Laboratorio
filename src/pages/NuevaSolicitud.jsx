@@ -135,37 +135,35 @@ export default function NuevaSolicitud() {
   const uploadAllFiles = async (requestId) => {
     if (uploadedFiles.length === 0) return
     setUploading(true)
+    const errors = []
 
     for (let i = 0; i < uploadedFiles.length; i++) {
       const f = uploadedFiles[i]
       const storagePath = `${requestId}/${Date.now()}_${f.name}`
 
       try {
-        // 1. Upload the physical file to Supabase Storage (bucket: "solicitudes")
         const { error: storageErr } = await supabase.storage
           .from("solicitudes")
           .upload(storagePath, f.file, {
             contentType: f.file.type || "application/octet-stream",
             upsert: false
           })
+        if (storageErr) throw new Error(`"${f.name}": ${storageErr.message}`)
 
-        if (storageErr) throw storageErr
-
-        // 2. Insert metadata record into applications_documents
-        await supabase.from("applications_documents").insert({
+        const { error: dbErr } = await supabase.from("applications_documents").insert({
           request_id: requestId,
           file_name: f.name,
           file_path: storagePath,
           file_type: f.file.type || "application/octet-stream",
           file_size_in_bytes: f.size
         })
+        if (dbErr) throw new Error(`Metadata "${f.name}": ${dbErr.message}`)
 
-        // Mark file as uploaded in UI
         setUploadedFiles(prev => prev.map((item, idx) =>
           idx === i ? { ...item, uploaded: true, error: null } : item
         ))
       } catch (err) {
-        // Mark file as failed but don't block the whole submission
+        errors.push(err.message)
         setUploadedFiles(prev => prev.map((item, idx) =>
           idx === i ? { ...item, uploaded: false, error: err.message } : item
         ))
@@ -173,9 +171,13 @@ export default function NuevaSolicitud() {
     }
 
     setUploading(false)
+    if (errors.length > 0) {
+      throw new Error("Algunos documentos no pudieron subirse:\n" + errors.join("\n"))
+    }
   }
 
   const handleSubmit = async () => {
+
     if (!signaturesValid) {
       alert("Debes confirmar las firmas escribiendo los nombres completos del propietario y del Director Técnico antes de enviar.")
       return

@@ -44,8 +44,32 @@ function DetailPanel({ request, onClose, onStatusChange }) {
   const [activeTab, setActiveTab] = useState("establecimiento")
   const [observations, setObservations] = useState("")
   const [saving, setSaving] = useState(false)
+  const [documents, setDocuments] = useState([])
+  const [loadingDocs, setLoadingDocs] = useState(true)
   const { user } = useUser()
   const supabase = useSupabase()
+
+  React.useEffect(() => {
+    const fetchDocs = async () => {
+      setLoadingDocs(true)
+      const { data } = await supabase
+        .from("applications_documents")
+        .select("document_id, file_name, file_path, file_type, file_size_in_bytes, uploaded_at")
+        .eq("request_id", request.requestId)
+      setDocuments(data || [])
+      setLoadingDocs(false)
+    }
+    fetchDocs()
+  }, [request.requestId, supabase])
+
+  const downloadFile = async (filePath, fileName) => {
+    const { data, error } = await supabase.storage.from("solicitudes").createSignedUrl(filePath, 60)
+    if (error) { alert("No se pudo generar el enlace de descarga."); return }
+    const a = document.createElement("a")
+    a.href = data.signedUrl
+    a.download = fileName
+    a.click()
+  }
 
   const tabs = [
     { id: "establecimiento", label: "Establecimiento", icon: Building2 },
@@ -187,10 +211,34 @@ function DetailPanel({ request, onClose, onStatusChange }) {
           {activeTab === "documentos" && (
             <div className="space-y-3">
               <h3 className="font-semibold text-slate-900 dark:text-slate-100">Documentos Adjuntos</h3>
-              <div className="p-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
-                <FileText className="h-10 w-10 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
-                <p className="text-slate-500 dark:text-slate-400 text-sm">La gestión de archivos adjuntos estará disponible cuando se configure el almacenamiento de archivos (S3/Blob).</p>
-              </div>
+              {loadingDocs ? (
+                <div className="text-center py-8 text-slate-400 text-sm">Cargando documentos...</div>
+              ) : documents.length === 0 ? (
+                <div className="p-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
+                  <FileText className="h-10 w-10 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">No se adjuntaron documentos a esta solicitud.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {documents.map(doc => (
+                    <div key={doc.document_id} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <FileText className="h-5 w-5 text-blue-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{doc.file_name}</p>
+                          <p className="text-xs text-slate-500">{doc.file_type} · {(doc.file_size_in_bytes / 1024).toFixed(0)} KB</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => downloadFile(doc.file_path, doc.file_name)}
+                        className="shrink-0 ml-3 text-xs font-semibold text-[#0F539C] dark:text-blue-400 hover:underline"
+                      >
+                        Descargar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
