@@ -185,123 +185,108 @@ export default function NuevaSolicitud() {
       const safe = sanitizeForm(formData)
       const requestTypeIds = { apert: 1, tras: 2, renov: 3, cam_propietario: 4, cam_raz_social: 5, cam_actividad: 6, cam_nom: 7, nueva_area: 8 }
 
+      // Helper: find person by doc, or by email as fallback, or insert new
+      const findOrCreatePerson = async (data, prefix) => {
+        // 1. Search by document
+        if (data.document_number) {
+          const { data: byDoc } = await supabase.from("identity_persons")
+            .select("person_id").eq("document_type", data.document_type).eq("document_number", data.document_number).maybeSingle()
+          if (byDoc) return byDoc.person_id
+        }
+        // 2. Search by email
+        if (data.email) {
+          const { data: byEmail } = await supabase.from("identity_persons")
+            .select("person_id").eq("email", data.email).maybeSingle()
+          if (byEmail) return byEmail.person_id
+        }
+        // 3. Insert new
+        const fallbackEmail = data.email || (`${prefix}-${Date.now()}@sasrl.noemail.com`)
+        const { data: inserted, error } = await supabase.from("identity_persons")
+          .insert({ ...data, email: fallbackEmail }).select("person_id").single()
+        if (error) throw new Error(`Error al guardar persona (${prefix}): ${error.message}`)
+        return inserted.person_id
+      }
+
       // 1. Obtener user_id del solicitante
       const { data: dbUser, error: userErr } = await supabase
         .from("identity_users").select("user_id").eq("clerk_user_id", user.id).single()
       if (userErr || !dbUser) throw new Error("Usuario no sincronizado con la base de datos.")
 
-      // 2. Upsert Establecimiento por RNC único
-      const { data: estData, error: estErr } = await supabase
-        .from("registry_establishments")
-        .upsert({
-          trade_name: safe.estTradeName, rnc: safe.estRNC,
-          street_address: safe.estStreetAddress, sector: safe.estSector,
-          city: safe.estCity, municipality: safe.estMunicipality,
-          long_address: safe.estLongAddress, phone_fixed: safe.estPhoneFixed,
-          phone_mobile: safe.estPhoneMobile, email: safe.estEmail,
-          permit_category_id: formData.estPermitCategoryId,
-          presentation_form_id: formData.estPresentationFormId
-        }, { onConflict: 'rnc' })
-        .select("establishment_id")
-        .single()
-      if (estErr) throw new Error("Error al guardar establecimiento: " + estErr.message)
-
-      // 3a. Find-or-create persona del propietario por número de documento
-      let ownPersonId = null
-      const { data: existingOwnPerson } = await supabase
-        .from("identity_persons")
-        .select("person_id")
-        .eq("document_type", safe.ownDocumentType)
-        .eq("document_number", safe.ownDocumentNumber)
-        .maybeSingle()
-
-      if (existingOwnPerson) {
-        ownPersonId = existingOwnPerson.person_id
+      // 2. Find-or-create Establecimiento por RNC
+      let estId = null
+      const { data: existingEst } = await supabase.from("registry_establishments")
+        .select("establishment_id").eq("rnc", safe.estRNC).maybeSingle()
+      if (existingEst) {
+        estId = existingEst.establishment_id
       } else {
-        const ownEmail = safe.ownEmail || ("owner-" + safe.ownDocumentNumber.replace(/\D/g, '') + "@noemail.com")
-        const { data: newOwnPerson, error: ownPersonErr } = await supabase
-          .from("identity_persons")
+        const { data: newEst, error: estErr } = await supabase.from("registry_establishments")
           .insert({
-            first_name: safe.ownFirstName, last_name: safe.ownLastName,
-            document_type: safe.ownDocumentType, document_number: safe.ownDocumentNumber,
-            email: ownEmail, phone_fixed: safe.ownPhoneFixed, phone_mobile: safe.ownPhoneMobile
-          }).select("person_id").single()
-        if (ownPersonErr) throw new Error("Error al guardar propietario: " + ownPersonErr.message)
-        ownPersonId = newOwnPerson.person_id
+            trade_name: safe.estTradeName, rnc: safe.estRNC,
+            street_address: safe.estStreetAddress || "N/A", sector: safe.estSector || "N/A",
+            city: safe.estCity || "N/A", municipality: safe.estMunicipality || "N/A",
+            long_address: safe.estLongAddress, phone_fixed: safe.estPhoneFixed,
+            phone_mobile: safe.estPhoneMobile, email: safe.estEmail || "est@sasrl.noemail.com",
+            permit_category_id: formData.estPermitCategoryId,
+            presentation_form_id: formData.estPresentationFormId
+          }).select("establishment_id").single()
+        if (estErr) throw new Error("Error al guardar establecimiento: " + estErr.message)
+        estId = newEst.establishment_id
       }
 
-      // 3b. Find-or-create owner record
-      const { data: existingOwner } = await supabase
-        .from("registry_owners").select("owner_id").eq("person_id", ownPersonId).maybeSingle()
+      // 3. Find-or-create Propietario
+      const ownPersonId = await findOrCreatePerson({
+        first_name: safe.ownFirstName, last_name: safe.ownLastName,
+        document_type: safe.ownDocumentType, document_number: safe.ownDocumentNumber,
+        email: safe.ownEmail, phone_fixed: safe.ownPhoneFixed, phone_mobile: safe.ownPhoneMobile
+      }, "own")
+      const { data: existingOwner } = await supabase.from("registry_owners")
+        .select("owner_id").eq("person_id", ownPersonId).maybeSingle()
       let ownerId = existingOwner?.owner_id
       if (!ownerId) {
-        const { data: newOwner, error: ownErr } = await supabase
-          .from("registry_owners")
+        const { data: newOwner, error: ownErr } = await supabase.from("registry_owners")
           .insert({
             person_id: ownPersonId,
-            street_address: safe.ownStreetAddress || "N/A",
-            sector: safe.ownSector || "N/A",
-            city: safe.ownCity || "N/A",
-            municipality: safe.ownMunicipality || "N/A",
+            street_address: safe.ownStreetAddress || "N/A", sector: safe.ownSector || "N/A",
+            city: safe.ownCity || "N/A", municipality: safe.ownMunicipality || "N/A",
             long_address: safe.ownLongAddress
           }).select("owner_id").single()
         if (ownErr) throw new Error("Error al registrar propietario: " + ownErr.message)
         ownerId = newOwner.owner_id
       }
 
-      // 4a. Find-or-create persona del director técnico
-      let dirPersonId = null
-      const { data: existingDirPerson } = await supabase
-        .from("identity_persons")
-        .select("person_id")
-        .eq("document_type", safe.dirDocumentType)
-        .eq("document_number", safe.dirDocumentNumber)
-        .maybeSingle()
-
-      if (existingDirPerson) {
-        dirPersonId = existingDirPerson.person_id
-      } else {
-        const dirEmail = safe.dirEmail || ("dir-" + safe.dirDocumentNumber.replace(/\D/g, '') + "@noemail.com")
-        const { data: newDirPerson, error: dirPersonErr } = await supabase
-          .from("identity_persons")
+      // 4. Find-or-create Director Técnico
+      const dirPersonId = await findOrCreatePerson({
+        first_name: safe.dirFirstName, last_name: safe.dirLastName,
+        document_type: safe.dirDocumentType, document_number: safe.dirDocumentNumber,
+        email: safe.dirEmail, phone_fixed: safe.dirPhoneFixed, phone_mobile: safe.dirPhoneMobile
+      }, "dir")
+      let dirId = null
+      if (safe.dirExequaturNumber) {
+        const { data: existingDir } = await supabase.from("registry_technical_directors")
+          .select("director_id").eq("exequatur_number", safe.dirExequaturNumber).maybeSingle()
+        dirId = existingDir?.director_id
+      }
+      if (!dirId) {
+        const { data: newDir, error: dirErr } = await supabase.from("registry_technical_directors")
           .insert({
-            first_name: safe.dirFirstName, last_name: safe.dirLastName,
-            document_type: safe.dirDocumentType, document_number: safe.dirDocumentNumber,
-            email: dirEmail, phone_fixed: safe.dirPhoneFixed, phone_mobile: safe.dirPhoneMobile
-          }).select("person_id").single()
-        if (dirPersonErr) throw new Error("Error al guardar director técnico: " + dirPersonErr.message)
-        dirPersonId = newDirPerson.person_id
+            person_id: dirPersonId, profession: safe.dirProfession || "N/A",
+            exequatur_number: safe.dirExequaturNumber || ("EXQ-" + Date.now()),
+            exequatur_date: formData.dirExequaturDate || new Date().toISOString().split("T")[0],
+            street_address: safe.dirStreetAddress || "N/A", sector: safe.dirSector || "N/A",
+            city: safe.dirCity || "N/A", municipality: safe.dirMunicipality || "N/A",
+            long_address: safe.dirLongAddress
+          }).select("director_id").single()
+        if (dirErr) throw new Error("Error al registrar director técnico: " + dirErr.message)
+        dirId = newDir.director_id
       }
 
-      // 4b. Find-or-create director record (upsert on exequatur_number)
-      const { data: dirData, error: dirErr } = await supabase
-        .from("registry_technical_directors")
-        .upsert({
-          person_id: dirPersonId,
-          profession: safe.dirProfession || "N/A",
-          exequatur_number: safe.dirExequaturNumber,
-          exequatur_date: formData.dirExequaturDate || new Date().toISOString().split("T")[0],
-          street_address: safe.dirStreetAddress || "N/A",
-          sector: safe.dirSector || "N/A",
-          city: safe.dirCity || "N/A",
-          municipality: safe.dirMunicipality || "N/A",
-          long_address: safe.dirLongAddress
-        }, { onConflict: 'exequatur_number' })
-        .select("director_id")
-        .single()
-      if (dirErr) throw new Error("Error al registrar director técnico: " + dirErr.message)
-
-      // 5. Insertar solicitud — request_number es GENERATED ALWAYS, no se inserta
-      const { data: reqData, error: reqErr } = await supabase
-        .from("applications_requests")
+      // 5. Insertar solicitud
+      const { data: reqData, error: reqErr } = await supabase.from("applications_requests")
         .insert({
           applicant_user_id: dbUser.user_id,
           request_type_id: requestTypeIds[tipoTramite] || 1,
-          establishment_id: estData.establishment_id,
-          owner_id: ownerId,
-          director_id: dirData.director_id,
-          status_id: 1,
-          applicant_observations: safe.applicantObservations,
+          establishment_id: estId, owner_id: ownerId, director_id: dirId,
+          status_id: 1, applicant_observations: safe.applicantObservations,
           digital_signature_date: new Date().toISOString()
         }).select("request_id, request_number").single()
       if (reqErr) throw new Error("Error al guardar solicitud: " + reqErr.message)
@@ -312,6 +297,7 @@ export default function NuevaSolicitud() {
 
       alert("¡Solicitud enviada! Código: " + reqData.request_number)
       navigate("/app/mis-solicitudes")
+
     } catch (e) {
       alert("Error al guardar: " + e.message)
     }
