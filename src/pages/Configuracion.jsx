@@ -141,24 +141,35 @@ export default function Configuracion() {
 
   const handleSaveCatalog = async () => {
     setIsLoadingCatalog(true)
-    
     try {
       const isNew = catalogItem.id === null;
-        // Update local state based on catalog context
-        const updateState = (prev) => {
-            if (isNew) return [...prev, savedItem];
-            return prev.map(item => item.id === savedItem.id ? savedItem : item);
-        };
+      let tableName = "";
+      let idColumn = "";
+      let nameColumn = "";
 
-        if (catalogContext.type === 'requestTypes') setRequestTypes(updateState);
-        if (catalogContext.type === 'permitCategories') setPermitCategories(updateState);
-        if (catalogContext.type === 'presentationForms') setPresentationForms(updateState);
-
-        setIsCatalogModalOpen(false);
-      } else {
-        const err = await response.json();
-        alert("Error al guardar: " + (err.error || response.statusText));
+      if (catalogContext.type === 'requestTypes') {
+        tableName = "applications_request_types";
+        idColumn = "request_type_id";
+        nameColumn = "type_name";
+      } else if (catalogContext.type === 'permitCategories') {
+        tableName = "registry_permit_categories";
+        idColumn = "permit_category_id";
+        nameColumn = "category_name";
+      } else if (catalogContext.type === 'presentationForms') {
+        tableName = "applications_presentation_forms";
+        idColumn = "presentation_form_id";
+        nameColumn = "form_name";
       }
+
+      if (isNew) {
+        await supabase.from(tableName).insert({ [nameColumn]: catalogItem.name });
+      } else {
+        await supabase.from(tableName).update({ [nameColumn]: catalogItem.name }).eq(idColumn, catalogItem.id);
+      }
+
+      // Refresh data (lazy way: reload window or just re-fetch)
+      window.location.reload(); 
+      setIsCatalogModalOpen(false);
     } catch (error) {
       alert("Error de conexión: " + error.message);
     } finally {
@@ -167,27 +178,20 @@ export default function Configuracion() {
   }
 
   const handleDeleteCatalog = async (type, id) => {
-    if (!window.confirm("¿Está seguro de eliminar o desactivar este elemento?")) return;
+    if (!window.confirm("¿Está seguro de eliminar este elemento?")) return;
     
-    let endpoint = '';
-    if (type === 'requestTypes') endpoint = 'request-types';
-    if (type === 'permitCategories') endpoint = 'permit-categories';
-    if (type === 'presentationForms') endpoint = 'presentation-forms';
+    let tableName = "";
+    let idColumn = "";
+    if (type === 'requestTypes') { tableName = "applications_request_types"; idColumn = "request_type_id"; }
+    else if (type === 'permitCategories') { tableName = "registry_permit_categories"; idColumn = "category_id"; }
+    else if (type === 'presentationForms') { tableName = "registry_presentation_forms"; idColumn = "form_id"; }
 
     try {
-        const response = await fetch(`http://localhost:5000/api/catalogs/${endpoint}/${id}`, {
-            method: 'DELETE'
-        });
-        if (response.ok) {
-            const filterState = (prev) => prev.filter(item => item.id !== id);
-            if (type === 'requestTypes') setRequestTypes(filterState);
-            if (type === 'permitCategories') setPermitCategories(filterState);
-            if (type === 'presentationForms') setPresentationForms(filterState);
-        } else {
-            alert("No se pudo eliminar. Verifique que no esté en uso.");
-        }
+      const { error } = await supabase.from(tableName).delete().eq(idColumn, id);
+      if (error) throw error;
+      window.location.reload();
     } catch (error) {
-        alert("Error de conexión: " + error.message);
+      alert("Error al eliminar: " + error.message);
     }
   }
 
@@ -195,24 +199,21 @@ export default function Configuracion() {
   const handleSaveSecurity = async () => {
     setIsSavingSecurity(true);
     try {
-        const response = await fetch('http://localhost:5000/api/security-settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                Require2FA: twoFAEnabled,
-                AllowConcurrentSessions: concurrentSessions,
-                InactivityTimeoutMinutes: parseInt(inactivityTime) || 30
-            })
-        });
-        if (response.ok) {
-            alert("Ajustes de seguridad guardados en SQL Server (System.SecuritySettings) exitosamente.");
-        } else {
-            alert("Error al guardar ajustes");
-        }
+      const { error } = await supabase
+        .from("system_security_settings")
+        .update({
+          require_2fa: twoFAEnabled,
+          allow_concurrent_sessions: concurrentSessions,
+          inactivity_timeout_minutes: parseInt(inactivityTime) || 30
+        })
+        .eq("setting_id", 1);
+
+      if (error) throw error;
+      alert("Configuración de seguridad actualizada en Supabase.");
     } catch (error) {
-        alert("Error de conexión: " + error.message);
+      alert("Error al guardar: " + error.message);
     } finally {
-        setIsSavingSecurity(false);
+      setIsSavingSecurity(false);
     }
   }
 
