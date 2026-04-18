@@ -110,9 +110,13 @@ export default function NuevaSolicitud() {
   }
   const handlePrev = () => setCurrentStep(prev => Math.max(prev - 1, 0))
 
+  const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, ' ')
   const requiredOwnerName = `${formData.ownFirstName} ${formData.ownLastName}`.trim()
   const requiredDTName = `${formData.dirFirstName} ${formData.dirLastName}`.trim()
-  const signaturesValid = signatureName === requiredOwnerName && signatureDT === requiredDTName && requiredOwnerName.length > 2
+  const signaturesValid = 
+    normalize(signatureName) === normalize(requiredOwnerName) && 
+    normalize(signatureDT) === normalize(requiredDTName) && 
+    requiredOwnerName.length > 2
 
   // Handle file drop / selection
   const addFiles = (fileList) => {
@@ -608,12 +612,12 @@ export default function NuevaSolicitud() {
                       onChange={e => setSignatureName(e.target.value)}
                       placeholder="Nombre completo del propietario"
                       className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all dark:bg-slate-900 dark:text-white ${
-                        signatureName === requiredOwnerName && requiredOwnerName.length > 2
+                        signatureName && normalize(signatureName) === normalize(requiredOwnerName) && requiredOwnerName.length > 2
                           ? "border-emerald-400 ring-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800"
                           : "border-slate-200 dark:border-slate-700 focus:ring-[#0F539C]"
                       }`}
                     />
-                    {signatureName === requiredOwnerName && requiredOwnerName.length > 2 && (
+                    {signatureName && normalize(signatureName) === normalize(requiredOwnerName) && requiredOwnerName.length > 2 && (
                       <p className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Firma del propietario confirmada</p>
                     )}
                   </div>
@@ -626,12 +630,12 @@ export default function NuevaSolicitud() {
                       onChange={e => setSignatureDT(e.target.value)}
                       placeholder="Nombre completo del Director Técnico"
                       className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all dark:bg-slate-900 dark:text-white ${
-                        signatureDT === requiredDTName && requiredDTName.length > 2
+                        signatureDT && normalize(signatureDT) === normalize(requiredDTName) && requiredDTName.length > 2
                           ? "border-emerald-400 ring-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800"
                           : "border-slate-200 dark:border-slate-700 focus:ring-[#0F539C]"
                       }`}
                     />
-                    {signatureDT === requiredDTName && requiredDTName.length > 2 && (
+                    {signatureDT && normalize(signatureDT) === normalize(requiredDTName) && requiredDTName.length > 2 && (
                       <p className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Firma del Director Técnico confirmada</p>
                     )}
                   </div>
