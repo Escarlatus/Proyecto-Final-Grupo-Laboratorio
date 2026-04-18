@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import DashboardLayout from './layouts/DashboardLayout'
 import Dashboard from './pages/Dashboard'
 import NuevaSolicitud from './pages/NuevaSolicitud'
@@ -9,7 +9,7 @@ import MisSolicitudes from './pages/MisSolicitudes'
 import DetalleSolicitud from './pages/DetalleSolicitud'
 import BandejaTecnico from './pages/BandejaTecnico'
 import BandejaReceptor from './pages/BandejaReceptor'
-import { Show, useUser } from '@clerk/react'
+import { SignedIn, SignedOut, useUser } from '@clerk/react'
 import { useSupabase } from './hooks/useSupabase'
 
 // Redirects each role to their correct home page
@@ -133,12 +133,12 @@ function App() {
 
         <Route path="/app" element={
           <React.Fragment>
-            <Show when="signed-out">
+            <SignedOut>
               <Navigate to="/" replace />
-            </Show>
-            <Show when="signed-in">
+            </SignedOut>
+            <SignedIn>
               <DashboardLayout />
-            </Show>
+            </SignedIn>
           </React.Fragment>
         }>
           <Route index element={<RoleBasedIndex />} />
