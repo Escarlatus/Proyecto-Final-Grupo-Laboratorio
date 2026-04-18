@@ -12,6 +12,10 @@ const STATUS_CONFIG = {
   6: { label: "Observada",      color: "text-orange-600 bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800 dark:text-orange-400",   key: "observada" },
 }
 
+const STATUS_MAP = Object.fromEntries(
+  Object.entries(STATUS_CONFIG).map(([id, cfg]) => [Number(id), cfg.key])
+)
+
 const STATUS_LIST_MAP = {
   borrador: 1, en_revision: 2, favorable: 3, rechazada: 4, aprobada: 5, observada: 6
 }
@@ -65,10 +69,9 @@ function DetailPanel({ request, onClose, onStatusChange }) {
         .from("applications_requests")
         .update({
           status_id: newStatusId,
-          reviewer_observations: observations || request.reviewerObservations,
           reviewer_user_id: dbUser ? dbUser.user_id : null
         })
-        .eq("request_id", request.requestId);
+        .eq("request_id", request.requestId)
 
       if (!error) {
         onStatusChange()
@@ -322,39 +325,50 @@ export default function BandejaTecnico() {
       const { data, error } = await supabase
         .from("applications_requests")
         .select(`
-          request_id, request_number, status_id, applicant_observations, reviewer_observations,
+          request_id, request_number, status_id, applicant_observations,
           applications_request_types(type_name),
           identity_users!applicant_user_id(identity_persons(first_name, last_name)),
           registry_establishments(*),
-          registry_owners(*),
-          registry_technical_directors(*)
+          registry_owners(owner_id, street_address, sector, city, municipality, long_address,
+            identity_persons(first_name, last_name, document_type, document_number, email, phone_fixed, phone_mobile)
+          ),
+          registry_technical_directors(director_id, profession, exequatur_number, exequatur_date, street_address, sector, city, municipality,
+            identity_persons(first_name, last_name, document_type, document_number, email, phone_fixed, phone_mobile)
+          )
         `)
         .eq("request_id", req.requestId)
-        .single();
+        .single()
         
       if (data) {
-        const est = data.registry_establishments || {};
-        const own = data.registry_owners || {};
-        const dir = data.registry_technical_directors || {};
-        const usr = data.identity_users?.identity_persons || {};
+        const est = data.registry_establishments || {}
+        const own = data.registry_owners || {}
+        const ownP = own.identity_persons || {}
+        const dir = data.registry_technical_directors || {}
+        const dirP = dir.identity_persons || {}
+        const usr = data.identity_users?.identity_persons || {}
 
         setDetailData({
           requestId: data.request_id, id: data.request_number, statusId: data.status_id,
           requestType: data.applications_request_types?.type_name,
           applicantFirstName: usr.first_name || "", applicantLastName: usr.last_name || "",
-          applicantObservations: data.applicant_observations, reviewerObservations: data.reviewer_observations,
+          applicantObservations: data.applicant_observations,
+          reviewerObservations: null,
           
-          tradeName: est.trade_name, rnc: est.rnc, permitCategory: est.permit_category_id, presentationForm: est.presentation_form_id,
-          estStreet: est.street_address, estSector: est.sector, estCity: est.city, estMunicipality: est.municipality,
-          estLongAddress: est.long_address, estPhoneFixed: est.phone_fixed, estPhoneMobile: est.phone_mobile, estEmail: est.email,
+          tradeName: est.trade_name, rnc: est.rnc,
+          permitCategory: est.permit_category_id, presentationForm: est.presentation_form_id,
+          estStreet: est.street_address, estSector: est.sector, estCity: est.city,
+          estMunicipality: est.municipality, estLongAddress: est.long_address,
+          estPhoneFixed: est.phone_fixed, estPhoneMobile: est.phone_mobile, estEmail: est.email,
           
-          ownerFirstName: own.first_name, ownerLastName: own.last_name, ownerDocType: own.document_type, ownerDocNum: own.document_number,
-          ownerEmail: own.email, ownerPhoneFixed: own.phone_fixed, ownerPhoneMobile: own.phone_mobile,
+          ownerFirstName: ownP.first_name, ownerLastName: ownP.last_name,
+          ownerDocType: ownP.document_type, ownerDocNum: ownP.document_number,
+          ownerEmail: ownP.email, ownerPhoneFixed: ownP.phone_fixed, ownerPhoneMobile: ownP.phone_mobile,
           ownerStreet: own.street_address, ownerSector: own.sector, ownerCity: own.city, ownerMunicipality: own.municipality,
           
-          dirFirstName: dir.first_name, dirLastName: dir.last_name, profession: dir.profession, dirDocType: dir.document_type,
-          dirDocNum: dir.document_number, exequaturNumber: dir.exequatur_number, exequaturDate: dir.exequatur_date,
-          dirEmail: dir.email, dirPhoneFixed: dir.phone_fixed, dirPhoneMobile: dir.phone_mobile,
+          dirFirstName: dirP.first_name, dirLastName: dirP.last_name,
+          profession: dir.profession, dirDocType: dirP.document_type, dirDocNum: dirP.document_number,
+          exequaturNumber: dir.exequatur_number, exequaturDate: dir.exequatur_date,
+          dirEmail: dirP.email, dirPhoneFixed: dirP.phone_fixed, dirPhoneMobile: dirP.phone_mobile,
           dirStreet: dir.street_address, dirSector: dir.sector, dirCity: dir.city
         })
       }
