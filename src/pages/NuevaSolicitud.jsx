@@ -43,6 +43,8 @@ export default function NuevaSolicitud() {
     applicantObservations: ""
   })
 
+  const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }))
+
   // Load catalog options from Supabase on mount
   React.useEffect(() => {
     const loadCatalogs = async () => {
