@@ -34,7 +34,11 @@ function AuthGuard({ children }) {
   if (isActive === false) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
       <div className="text-center p-8 max-w-md">
-        <div className="text-5xl mb-4">🔒</div>
+        <img
+          src="/gato.jpg"
+          alt="Cuenta desactivada"
+          className="w-64 h-64 object-cover rounded-2xl mx-auto mb-6 shadow-lg"
+        />
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Cuenta desactivada</h1>
         <p className="text-slate-500 dark:text-slate-400">Tu cuenta ha sido desactivada por un administrador. Contacta al equipo del SASRL para más información.</p>
       </div>
