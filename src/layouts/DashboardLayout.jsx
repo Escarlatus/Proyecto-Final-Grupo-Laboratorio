@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from "react"
 import { Link, Outlet, useLocation } from "react-router-dom"
-import { LayoutDashboard, FilePlus2, Settings, Bell, Search, Hexagon, Moon, Sun } from "lucide-react"
+import { LayoutDashboard, FilePlus2, Settings, Bell, Search, Hexagon, Moon, Sun, ClipboardList, Stamp, ListChecks } from "lucide-react"
 import { cn } from "../lib/utils"
-import { UserButton } from "@clerk/react"
+import { UserButton, useUser } from "@clerk/react"
+import CompletarPerfilModal from "../components/CompletarPerfilModal"
+import { useSupabase } from "../hooks/useSupabase"
 
 export default function DashboardLayout() {
   const location = useLocation()
+  const { user } = useUser()
+  const supabase = useSupabase()
+  const [userRole, setUserRole] = useState(null)
+  const [profileComplete, setProfileComplete] = useState(true) // assume complete until checked
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("theme") === "dark" || 
@@ -25,11 +31,67 @@ export default function DashboardLayout() {
     }
   }, [isDark])
 
-  const navItems = [
-    { name: "Dashboard", href: "/app", icon: LayoutDashboard },
-    { name: "Nueva Solicitud", href: "/app/nueva-solicitud", icon: FilePlus2 },
-    { name: "Configuración", href: "/app/configuracion", icon: Settings },
-  ]
+  // Fetch role from DB on login
+  useEffect(() => {
+    if (!user) return
+
+    const fetchRoleAndProfile = async () => {
+      try {
+        const { data: userData } = await supabase
+          .from("identity_users")
+          .select("role_id, person_id, identity_persons(document_number)")
+          .eq("clerk_user_id", user.id)
+          .single();
+
+        if (userData) {
+          const ROLE_MAP = {
+            1: 'Solicitante',
+            2: 'Revisor Técnico',
+            3: 'Administrador del Sistema',
+            4: 'Receptor VUS'
+          };
+          setUserRole(ROLE_MAP[userData.role_id] || "Solicitante");
+          
+          if (!userData.identity_persons?.document_number) {
+            setProfileComplete(false);
+          }
+        }
+      } catch (e) { console.error(e) }
+    }
+
+    fetchRoleAndProfile()
+  }, [user, supabase])
+
+  // Default to Solicitante until role loads (safe default — least privilege)
+  const role = userRole || "Solicitante"
+
+  // Nav items per role
+  const allNavItems = {
+    "Solicitante": [
+      { name: "Mis Solicitudes",  href: "/app/mis-solicitudes",  icon: ListChecks },
+      { name: "Nueva Solicitud",  href: "/app/nueva-solicitud", icon: FilePlus2 },
+    ],
+    "Revisor Técnico": [
+      { name: "Bandeja de Revisión", href: "/app",              icon: ClipboardList },
+    ],
+    "Administrador del Sistema": [
+      { name: "Dashboard",         href: "/app",               icon: LayoutDashboard },
+      { name: "Nueva Solicitud",   href: "/app/nueva-solicitud", icon: FilePlus2 },
+      { name: "Configuración",     href: "/app/configuracion",  icon: Settings },
+    ],
+    "Receptor VUS": [
+      { name: "Bandeja VUS",       href: "/app",               icon: Stamp },
+    ],
+  }
+
+  const navItems = allNavItems[role] || allNavItems["Administrador del Sistema"]
+
+  const roleLabel = {
+    "Solicitante": "Solicitante",
+    "Revisor Técnico": "Revisor Técnico",
+    "Administrador del Sistema": "Administrador",
+    "Receptor VUS": "Receptor VUS",
+  }[role] || "Usuario"
 
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 flex transition-colors duration-300">
@@ -73,7 +135,7 @@ export default function DashboardLayout() {
             <UserButton />
             <div className="flex flex-col">
               <span className="text-sm font-medium text-slate-900 dark:text-white leading-none">Mi Perfil</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">Conectado</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">{roleLabel}</span>
             </div>
             
             {/* Dark Mode Toggle inside Sidebar at bottom */}
@@ -87,7 +149,6 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-950 relative transition-colors duration-300">
         <header className="h-20 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-6 transition-colors duration-300">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#002D62] via-transparent to-[#CE1126] opacity-80"></div>
@@ -122,6 +183,17 @@ export default function DashboardLayout() {
           </div>
         </div>
       </main>
+
+      {/* Profile completion modal — shown when document number is missing */}
+      {!profileComplete && user && (
+        <CompletarPerfilModal
+          clerkUserId={user.id}
+          defaultFirstName={user.firstName || ""}
+          defaultLastName={user.lastName || ""}
+          defaultEmail={user.primaryEmailAddress?.emailAddress || ""}
+          onComplete={() => setProfileComplete(true)}
+        />
+      )}
     </div>
   )
 }
