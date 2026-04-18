@@ -12,11 +12,35 @@ import BandejaReceptor from './pages/BandejaReceptor'
 import { useAuth, useUser } from '@clerk/react'
 import { useSupabase } from './hooks/useSupabase'
 
-// Guard that redirects to "/" if the user is not signed in
+// Guard that redirects to "/" if the user is not signed in or is inactive
 function AuthGuard({ children }) {
   const { isSignedIn, isLoaded } = useAuth()
+  const { user } = useUser()
+  const supabase = useSupabase()
+  const [isActive, setIsActive] = React.useState(null)
+
+  React.useEffect(() => {
+    if (!isSignedIn || !user) return
+    supabase
+      .from("identity_users")
+      .select("is_active")
+      .eq("clerk_user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => setIsActive(data ? data.is_active : true))
+  }, [isSignedIn, user, supabase])
+
   if (!isLoaded) return null
   if (!isSignedIn) return <Navigate to="/" replace />
+  if (isActive === false) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="text-center p-8 max-w-md">
+        <div className="text-5xl mb-4">🔒</div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Cuenta desactivada</h1>
+        <p className="text-slate-500 dark:text-slate-400">Tu cuenta ha sido desactivada por un administrador. Contacta al equipo del SASRL para más información.</p>
+      </div>
+    </div>
+  )
+  if (isActive === null && isSignedIn) return null // still checking
   return children
 }
 

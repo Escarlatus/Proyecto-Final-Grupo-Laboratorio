@@ -44,6 +44,7 @@ export default function Configuracion() {
           .select(`
             clerk_user_id,
             role_id,
+            is_active,
             identity_roles(role_name),
             identity_persons(first_name, last_name, email, document_number)
           `);
@@ -55,7 +56,8 @@ export default function Configuracion() {
             lastName: u.identity_persons?.last_name || "",
             email: u.identity_persons?.email || "",
             documentNumber: u.identity_persons?.document_number || "",
-            rol: u.identity_roles?.role_name || "Solicitante"
+            rol: u.identity_roles?.role_name || "Solicitante",
+            isActive: u.is_active
           }));
           setUsersDb(mapped)
         }
@@ -123,6 +125,23 @@ export default function Configuracion() {
       setIsLoading(false)
       setIsRoleModalOpen(false)
       setUserToEdit(null)
+    }
+  }
+
+  const handleToggleActive = async (user) => {
+    const newStatus = !user.isActive
+    const label = newStatus ? "activar" : "desactivar"
+    if (!window.confirm(`¿Deseas ${label} a ${user.firstName} ${user.lastName}?`)) return
+
+    const { error } = await supabase
+      .from("identity_users")
+      .update({ is_active: newStatus })
+      .eq("clerk_user_id", user.id)
+
+    if (!error) {
+      setUsersDb(prev => prev.map(u => u.id === user.id ? { ...u, isActive: newStatus } : u))
+    } else {
+      alert("Error al cambiar estado: " + error.message)
     }
   }
 
@@ -317,18 +336,31 @@ export default function Configuracion() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-center">
-                              <Badge variant={user.estado === "Activo" ? "aprobada" : "rechazada"}>
-                                {user.estado}
+                              <Badge variant={user.isActive ? "aprobada" : "rechazada"}>
+                                {user.isActive ? "Activo" : "Inactivo"}
                               </Badge>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <button 
-                                onClick={() => openRoleModal(user)}
-                                className="p-2 text-slate-400 hover:text-primary transition-colors"
-                                title="Cambiar Rol"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleToggleActive(user)}
+                                  title={user.isActive ? "Desactivar usuario" : "Activar usuario"}
+                                  className={`p-2 rounded-md transition-colors text-xs font-medium ${
+                                    user.isActive
+                                      ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                      : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                                  }`}
+                                >
+                                  {user.isActive ? "Desactivar" : "Activar"}
+                                </button>
+                                <button 
+                                  onClick={() => openRoleModal(user)}
+                                  className="p-2 text-slate-400 hover:text-primary transition-colors"
+                                  title="Cambiar Rol"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
