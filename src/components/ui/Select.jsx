@@ -14,7 +14,6 @@ const Select = React.forwardRef(({ className, options = [], label, error, placeh
             className
           )}
           ref={ref}
-          defaultValue=""
           {...props}
         >
           <option value="" disabled hidden>{placeholder}</option>
