@@ -4,6 +4,7 @@ import { LayoutDashboard, FilePlus2, Settings, Bell, Hexagon, Moon, Sun, Clipboa
 import { cn } from "../lib/utils"
 import { UserButton, useUser } from "@clerk/react"
 import CompletarPerfilModal from "../components/CompletarPerfilModal"
+import NotificationPanel from "../components/NotificationPanel"
 import { useSupabase } from "../hooks/useSupabase"
 
 export default function DashboardLayout() {
@@ -13,6 +14,8 @@ export default function DashboardLayout() {
   const [userRole, setUserRole] = useState(null)
   const [profileComplete, setProfileComplete] = useState(true) // assume complete until checked
   const profileChecked = React.useRef(false) // prevent re-showing modal on Clerk user refresh
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("theme") === "dark" || 
@@ -31,6 +34,34 @@ export default function DashboardLayout() {
       localStorage.setItem("theme", "light")
     }
   }, [isDark])
+
+  // Fetch unread count and setup realtime
+  useEffect(() => {
+    if (!user) return
+    
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from('system_notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+      setUnreadCount(count || 0)
+    }
+
+    fetchUnread()
+
+    const channel = supabase
+      .channel('unread-count')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'system_notifications',
+        filter: `user_id=eq.${user?.id}`
+      }, fetchUnread)
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [user, supabase])
 
   // Fetch role from DB on login
   useEffect(() => {
@@ -166,10 +197,30 @@ export default function DashboardLayout() {
               >
                 {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
-            <button className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 border-2 border-white dark:border-slate-900"></span>
-            </button>
+            {/* Notifications */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className={cn(
+                  "p-2 rounded-xl transition-all duration-200 relative group",
+                  showNotifications 
+                    ? "bg-primary/10 text-primary dark:bg-primary/20" 
+                    : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                )}
+              >
+                <Bell className={cn("h-5 w-5 transition-transform group-hover:rotate-12", unreadCount > 0 && "animate-pulse")} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center border-2 border-white dark:border-slate-900">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              
+              <NotificationPanel 
+                isOpen={showNotifications} 
+                onClose={() => setShowNotifications(false)} 
+              />
+            </div>
           </div>
         </header>
 
