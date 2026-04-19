@@ -51,39 +51,55 @@ export default function CompletarPerfilModal({ clerkUserId, defaultFirstName = "
     setError("")
 
     try {
-      // 1. Conseguir el person_id
+      // 1. Get person_id from identity_users
       const { data: userData, error: userError } = await supabase
         .from("identity_users")
         .select("person_id")
         .eq("clerk_user_id", clerkUserId)
-        .single();
-        
+        .single()
+
       if (userError || !userData) {
-        setError("Error de sincronización con tu cuenta principal.")
+        setError(`No se encontró tu cuenta en el sistema (${userError?.message || "ID no registrado"}). Contacta al administrador.`)
         setSaving(false)
         return
       }
 
-      // 2. Actualizar identity_persons
-      const { error: updateError } = await supabase
+      if (!userData.person_id) {
+        setError("Tu cuenta no tiene un perfil vinculado. Contacta al administrador para que revise la sincronización.")
+        setSaving(false)
+        return
+      }
+
+      // 2. Update identity_persons
+      const { data: updated, error: updateError } = await supabase
         .from("identity_persons")
         .update({
           first_name: form.firstName,
           last_name: form.lastName,
           document_type: form.documentType,
           document_number: form.documentNumber,
-          phone_mobile: form.phoneMobile,
-          phone_fixed: form.phoneFixed
+          phone_mobile: form.phoneMobile || null,
+          phone_fixed: form.phoneFixed || null
         })
-        .eq("person_id", userData.person_id);
+        .eq("person_id", userData.person_id)
+        .select("document_number")
 
       if (updateError) {
-        setError("Error al guardar datos. Revisa los campos.")
-      } else {
-        onComplete()
+        setError("Error al guardar: " + updateError.message)
+        setSaving(false)
+        return
       }
-    } catch {
-      setError("No se pudo conectar con el servidor.")
+
+      // 3. Verify it actually saved (0 rows = wrong person_id)
+      if (!updated || updated.length === 0) {
+        setError("No se pudo guardar el perfil. El registro de persona no existe en la base de datos. Contacta al administrador.")
+        setSaving(false)
+        return
+      }
+
+      onComplete()
+    } catch (err) {
+      setError("No se pudo conectar con el servidor: " + (err?.message || ""))
     }
     setSaving(false)
   }

@@ -12,6 +12,7 @@ export default function DashboardLayout() {
   const supabase = useSupabase()
   const [userRole, setUserRole] = useState(null)
   const [profileComplete, setProfileComplete] = useState(true) // assume complete until checked
+  const profileChecked = React.useRef(false) // prevent re-showing modal on Clerk user refresh
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("theme") === "dark" || 
@@ -34,6 +35,7 @@ export default function DashboardLayout() {
   // Fetch role from DB on login
   useEffect(() => {
     if (!user) return
+    if (profileChecked.current) return // already checked, skip
 
     const fetchRoleAndProfile = async () => {
       try {
@@ -43,6 +45,7 @@ export default function DashboardLayout() {
           .eq("clerk_user_id", user.id)
           .single();
 
+        profileChecked.current = true // mark checked regardless of result
         if (userData) {
           const ROLE_MAP = {
             1: 'Solicitante',
