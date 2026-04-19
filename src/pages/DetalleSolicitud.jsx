@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import {
   ArrowLeft, Building2, User, GraduationCap, FileText, MessageSquare,
-  Clock, CheckCircle, XCircle, AlertTriangle, Stamp, Download, Loader2
+  Clock, CheckCircle, XCircle, AlertTriangle, Stamp, Download, Loader2,
+  UploadCloud, X, PlusCircle
 } from "lucide-react"
 import { useSupabase } from "../hooks/useSupabase"
 
@@ -41,15 +42,20 @@ export default function DetalleSolicitud() {
   const { id } = useParams()
   const navigate = useNavigate()
   const supabase = useSupabase()
+  const fileInputRef = useRef(null)
+
   const [detail, setDetail] = useState(null)
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("establecimiento")
+  const [isDragging, setIsDragging] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState([])
+  const [uploading, setUploading] = useState(false)
 
   const downloadFile = async (filePath, fileName) => {
     const { data, error } = await supabase.storage
       .from("solicitudes")
-      .createSignedUrl(filePath, 60) // URL válida por 60 segundos
+      .createSignedUrl(filePath, 60)
     if (error) { alert("No se pudo generar el enlace de descarga."); return }
     const a = document.createElement("a")
     a.href = data.signedUrl
@@ -57,69 +63,126 @@ export default function DetalleSolicitud() {
     a.click()
   }
 
+  const fetchDocs = async () => {
+    const { data: docs } = await supabase
+      .from("applications_documents")
+      .select("*")
+      .eq("request_id", id)
+    if (docs) {
+      setDocuments(docs.map(d => ({
+        documentId: d.document_id,
+        fileName: d.file_name,
+        filePath: d.file_path,
+        fileType: d.file_type,
+        fileSizeBytes: d.file_size_in_bytes,
+        uploadedAt: d.uploaded_at
+      })))
+    }
+  }
+
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("applications_requests")
           .select(`
-            request_id, request_number, status_id, applicant_observations, reviewer_observations,
+            request_id, request_number, status_id, applicant_observations, submitted_at, reviewed_at,
             applications_request_types(type_name),
             identity_users!applicant_user_id(identity_persons(first_name, last_name)),
             registry_establishments(*),
-            registry_owners(*),
-            registry_technical_directors(*)
+            registry_owners(owner_id, street_address, sector, city, municipality, long_address,
+              identity_persons(first_name, last_name, document_type, document_number, email, phone_fixed, phone_mobile)
+            ),
+            registry_technical_directors(director_id, profession, exequatur_number, exequatur_date, street_address, sector, city, municipality,
+              identity_persons(first_name, last_name, document_type, document_number, email, phone_fixed, phone_mobile)
+            )
           `)
           .eq("request_id", id)
-          .single();
-          
+          .single()
+
         if (data) {
-          const est = data.registry_establishments || {};
-          const own = data.registry_owners || {};
-          const dir = data.registry_technical_directors || {};
-          const usr = data.identity_users?.identity_persons || {};
+          const est = data.registry_establishments || {}
+          const own = data.registry_owners || {}
+          const ownP = own.identity_persons || {}
+          const dir = data.registry_technical_directors || {}
+          const dirP = dir.identity_persons || {}
+          const usr = data.identity_users?.identity_persons || {}
 
           setDetail({
             requestId: data.request_id, requestNumber: data.request_number, statusId: data.status_id,
             requestType: data.applications_request_types?.type_name,
             applicantFirstName: usr.first_name || "", applicantLastName: usr.last_name || "",
-            applicantObservations: data.applicant_observations, reviewerObservations: data.reviewer_observations,
-            
-            tradeName: est.trade_name, rnc: est.rnc, permitCategory: est.permit_category_id, presentationForm: est.presentation_form_id,
-            estStreet: est.street_address, estSector: est.sector, estCity: est.city, estMunicipality: est.municipality,
-            estLongAddress: est.long_address, estPhoneFixed: est.phone_fixed, estPhoneMobile: est.phone_mobile, estEmail: est.email,
-            
-            ownerFirstName: own.first_name, ownerLastName: own.last_name, ownerDocType: own.document_type, ownerDocNum: own.document_number,
-            ownerEmail: own.email, ownerPhoneFixed: own.phone_fixed, ownerPhoneMobile: own.phone_mobile,
+            applicantObservations: data.applicant_observations,
+            submittedAt: data.submitted_at, reviewedAt: data.reviewed_at,
+
+            tradeName: est.trade_name, rnc: est.rnc,
+            permitCategory: est.permit_category_id, presentationForm: est.presentation_form_id,
+            estStreet: est.street_address, estSector: est.sector, estCity: est.city,
+            estMunicipality: est.municipality, estLongAddress: est.long_address,
+            estPhoneFixed: est.phone_fixed, estPhoneMobile: est.phone_mobile, estEmail: est.email,
+
+            ownerFirstName: ownP.first_name, ownerLastName: ownP.last_name,
+            ownerDocType: ownP.document_type, ownerDocNum: ownP.document_number,
+            ownerEmail: ownP.email, ownerPhoneFixed: ownP.phone_fixed, ownerPhoneMobile: ownP.phone_mobile,
             ownerStreet: own.street_address, ownerSector: own.sector, ownerCity: own.city, ownerMunicipality: own.municipality,
-            
-            dirFirstName: dir.first_name, dirLastName: dir.last_name, profession: dir.profession, dirDocType: dir.document_type,
-            dirDocNum: dir.document_number, exequaturNumber: dir.exequatur_number, exequaturDate: dir.exequatur_date,
-            dirEmail: dir.email, dirPhoneFixed: dir.phone_fixed, dirPhoneMobile: dir.phone_mobile,
+
+            dirFirstName: dirP.first_name, dirLastName: dirP.last_name,
+            profession: dir.profession, dirDocType: dirP.document_type, dirDocNum: dirP.document_number,
+            exequaturNumber: dir.exequatur_number, exequaturDate: dir.exequatur_date,
+            dirEmail: dirP.email, dirPhoneFixed: dirP.phone_fixed, dirPhoneMobile: dirP.phone_mobile,
             dirStreet: dir.street_address, dirSector: dir.sector, dirCity: dir.city
           })
-          
-          // Documents — use applications_documents table (correct schema)
-          const { data: docs } = await supabase
-            .from("applications_documents")
-            .select("*")
-            .eq("request_id", id);
-          if (docs) {
-            setDocuments(docs.map(d => ({
-              documentId: d.document_id,
-              fileName: d.file_name,
-              filePath: d.file_path,
-              fileType: d.file_type,
-              fileSizeBytes: d.file_size_in_bytes,
-              uploadedAt: d.uploaded_at
-            })));
-          }
+
+          await fetchDocs()
         }
       } catch (e) { console.error(e) }
       finally { setLoading(false) }
     }
     fetchAll()
   }, [id, supabase])
+
+  const addPendingFiles = (fileList) => {
+    const allowed = ["application/pdf", "image/jpeg", "image/png", "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+    const maxSize = 10 * 1024 * 1024
+    const newFiles = Array.from(fileList).filter(f => {
+      if (!allowed.includes(f.type)) { alert(`Formato no permitido: ${f.name}`); return false }
+      if (f.size > maxSize) { alert(`${f.name} supera los 10MB`); return false }
+      return true
+    })
+    setPendingFiles(prev => [...prev, ...newFiles])
+  }
+
+  const uploadPendingFiles = async () => {
+    if (pendingFiles.length === 0) return
+    setUploading(true)
+    const errors = []
+    for (const f of pendingFiles) {
+      const storagePath = `${id}/${Date.now()}_${f.name}`
+      try {
+        const { error: storageErr } = await supabase.storage
+          .from("solicitudes")
+          .upload(storagePath, f, { contentType: f.type || "application/octet-stream", upsert: false })
+        if (storageErr) throw new Error(storageErr.message)
+
+        const { error: dbErr } = await supabase.from("applications_documents").insert({
+          request_id: Number(id),
+          file_name: f.name,
+          file_path: storagePath,
+          file_type: f.type || "application/octet-stream",
+          file_size_in_bytes: f.size
+        })
+        if (dbErr) throw new Error(dbErr.message)
+      } catch (err) {
+        errors.push(`${f.name}: ${err.message}`)
+      }
+    }
+    setPendingFiles([])
+    await fetchDocs()
+    setUploading(false)
+    if (errors.length > 0) alert("Algunos archivos no se subieron:\n" + errors.join("\n"))
+    else alert("Documentos cargados correctamente.")
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -141,11 +204,12 @@ export default function DetalleSolicitud() {
 
   const statusCfg = STATUS_CONFIG[detail.statusId] || STATUS_CONFIG[1]
   const StatusIcon = statusCfg.icon
+  const canUpload = [1, 2, 6].includes(detail.statusId) // Pendiente, En Revisión, Observada
   const tabs = [
     { id: "establecimiento", label: "Establecimiento", icon: Building2 },
     { id: "propietario",     label: "Propietario",     icon: User },
     { id: "director",        label: "Dir. Técnico",    icon: GraduationCap },
-    { id: "documentos",      label: "Documentos",      icon: FileText },
+    { id: "documentos",      label: `Documentos${documents.length > 0 ? ` (${documents.length})` : ""}`, icon: FileText },
     { id: "observaciones",   label: "Observaciones",   icon: MessageSquare },
   ]
 
@@ -170,23 +234,23 @@ export default function DetalleSolicitud() {
       </div>
 
       {/* Alert: Observada */}
-      {detail.statusId === 6 && detail.reviewerObservations && (
+      {detail.statusId === 6 && (
         <div className="flex gap-3 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/50 rounded-xl">
           <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold text-orange-900 dark:text-orange-200">Tu solicitud tiene observaciones del Revisor Técnico</p>
-            <p className="text-sm text-orange-800 dark:text-orange-300/80 mt-1">{detail.reviewerObservations}</p>
+            <p className="text-sm text-orange-800 dark:text-orange-300/80 mt-1">Revisa la pestaña de Observaciones y adjunta los documentos corregidos.</p>
           </div>
         </div>
       )}
 
       {/* Alert: Rechazada */}
-      {detail.statusId === 4 && detail.reviewerObservations && (
+      {detail.statusId === 4 && (
         <div className="flex gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl">
           <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold text-red-900 dark:text-red-200">Tu solicitud fue rechazada</p>
-            <p className="text-sm text-red-800 dark:text-red-300/80 mt-1">{detail.reviewerObservations}</p>
+            <p className="text-sm text-red-800 dark:text-red-300/80 mt-1">Consulta el motivo en la pestaña de Observaciones.</p>
           </div>
         </div>
       )}
@@ -197,7 +261,7 @@ export default function DetalleSolicitud() {
           <Stamp className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">¡Constancia emitida! Tu solicitud fue aprobada por DIGEMAPS.</p>
-            <p className="text-sm text-emerald-800 dark:text-emerald-300/80 mt-1">La constancia de registro está disponible. Conserva el número de expediente para tus registros.</p>
+            <p className="text-sm text-emerald-800 dark:text-emerald-300/80 mt-1">Conserva el número de expediente para tus registros.</p>
           </div>
         </div>
       )}
@@ -268,45 +332,109 @@ export default function DetalleSolicitud() {
             <InfoRow label="Calle"                value={detail.dirStreet} />
             <InfoRow label="Sector"               value={detail.dirSector} />
             <InfoRow label="Ciudad"               value={detail.dirCity} />
-            <InfoRow label="Municipio"            value={detail.dirMunicipality} />
           </Section>
         )}
 
         {activeTab === "documentos" && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
-              <FileText className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Documentos Adjuntos</h3>
-            </div>
-            <div className="p-5">
-              {documents.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">No hay documentos adjuntos en este expediente.</p>
-              ) : (
-                <div className="space-y-2">
-                  {documents.map(doc => (
-                    <div key={doc.documentId} className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-800 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                          <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <div className="space-y-4">
+            {/* Existing documents */}
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+                <FileText className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Documentos Adjuntos</h3>
+              </div>
+              <div className="p-5">
+                {documents.length === 0 ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">No hay documentos adjuntos en este expediente.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {documents.map(doc => (
+                      <div key={doc.documentId} className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-800 rounded-lg">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg shrink-0">
+                            <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{doc.fileName}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{doc.fileType} · {(doc.fileSizeBytes / 1024).toFixed(0)} KB</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{doc.fileName}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{doc.fileType} · {(doc.fileSizeBytes / 1024).toFixed(0)} KB · {doc.uploadedAt}</p>
-                        </div>
+                        <button
+                          onClick={() => downloadFile(doc.filePath, doc.fileName)}
+                          className="shrink-0 ml-3 flex items-center gap-1.5 text-xs px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Descargar
+                        </button>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Upload additional documents — only if status allows it */}
+            {canUpload && (
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="flex items-center gap-2 px-5 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+                  <PlusCircle className="h-4 w-4 text-[#0F539C] dark:text-blue-400" />
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Cargar documentos adicionales</h3>
+                </div>
+                <div className="p-5 space-y-3">
+                  {/* Dropzone */}
+                  <div
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? "border-[#0F539C] bg-blue-50 dark:bg-[#0F539C]/10"
+                        : "border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    }`}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={e => { e.preventDefault(); setIsDragging(false); addPendingFiles(e.dataTransfer.files) }}
+                  >
+                    <UploadCloud className={`mx-auto h-8 w-8 mb-2 ${isDragging ? "text-[#0F539C]" : "text-slate-400"}`} />
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Arrastra archivos o haz clic para seleccionar</p>
+                    <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG, DOC — máx. 10MB</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      className="hidden"
+                      onChange={e => { addPendingFiles(e.target.files); e.target.value = "" }}
+                    />
+                  </div>
+
+                  {/* Pending file list */}
+                  {pendingFiles.length > 0 && (
+                    <div className="space-y-2">
+                      {pendingFiles.map((f, i) => (
+                        <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="h-4 w-4 text-blue-500 shrink-0" />
+                            <p className="text-sm text-slate-700 dark:text-slate-300 truncate">{f.name}</p>
+                            <span className="text-xs text-slate-400 shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                          </div>
+                          <button onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                            className="shrink-0 ml-2 text-slate-400 hover:text-red-500 transition-colors">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
                       <button
-                        onClick={() => downloadFile(doc.filePath, doc.fileName)}
-                        className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-                        title="Descargar archivo"
+                        onClick={uploadPendingFiles}
+                        disabled={uploading}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0F539C] hover:bg-[#0d4a8a] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
                       >
-                        <Download className="h-3.5 w-3.5" />
-                        Descargar
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                        {uploading ? "Subiendo..." : `Subir ${pendingFiles.length} archivo${pendingFiles.length > 1 ? "s" : ""}`}
                       </button>
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -320,32 +448,18 @@ export default function DetalleSolicitud() {
                 {detail.applicantObservations || <span className="text-slate-400 dark:text-slate-500 italic">No añadiste observaciones.</span>}
               </p>
             </div>
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-orange-500" /> Observaciones del Revisor Técnico
-              </h3>
-              {detail.reviewerObservations ? (
-                <p className={`text-sm rounded-lg p-4 ${
-                  detail.statusId === 6 ? "bg-orange-50 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800/50"
-                  : detail.statusId === 4 ? "bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800/50"
-                  : "bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300"
-                }`}>
-                  {detail.reviewerObservations}
-                </p>
-              ) : (
-                <p className="text-sm text-slate-400 dark:text-slate-500 italic bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
-                  El revisor técnico aún no ha añadido observaciones.
-                </p>
-              )}
-            </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
                 <p className="text-slate-500 dark:text-slate-400 text-xs mb-1">Fecha de envío</p>
-                <p className="font-semibold text-slate-900 dark:text-slate-100">{detail.submittedAt ? new Date(detail.submittedAt).toLocaleDateString("es-DO", { day:"2-digit", month:"long", year:"numeric" }) : "—"}</p>
+                <p className="font-semibold text-slate-900 dark:text-slate-100">
+                  {detail.submittedAt ? new Date(detail.submittedAt).toLocaleDateString("es-DO", { day:"2-digit", month:"long", year:"numeric" }) : "—"}
+                </p>
               </div>
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
                 <p className="text-slate-500 dark:text-slate-400 text-xs mb-1">Última revisión</p>
-                <p className="font-semibold text-slate-900 dark:text-slate-100">{detail.reviewedAt ? new Date(detail.reviewedAt).toLocaleDateString("es-DO", { day:"2-digit", month:"long", year:"numeric" }) : "Pendiente"}</p>
+                <p className="font-semibold text-slate-900 dark:text-slate-100">
+                  {detail.reviewedAt ? new Date(detail.reviewedAt).toLocaleDateString("es-DO", { day:"2-digit", month:"long", year:"numeric" }) : "Pendiente"}
+                </p>
               </div>
             </div>
           </div>

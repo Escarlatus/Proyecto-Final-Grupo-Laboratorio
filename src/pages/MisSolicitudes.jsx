@@ -195,7 +195,7 @@ export default function MisSolicitudes() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filtered.map((req) => (
                 <tr key={req.id}
-                  onClick={() => navigate(`/app/solicitud/${req.requestId}`)}
+                  onClick={() => navigate(`/app/solicitud/${req.internalId}`)}
                   className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
                   <td className="py-3 px-4 font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">{req.id}</td>
                   <td className="py-3 px-4 text-sm text-slate-700 dark:text-slate-300">{req.type}</td>
