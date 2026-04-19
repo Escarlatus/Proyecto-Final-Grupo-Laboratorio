@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { Link, Outlet, useLocation } from "react-router-dom"
-import { LayoutDashboard, FilePlus2, Settings, Bell, Hexagon, Moon, Sun, ClipboardList, Stamp, ListChecks, BarChart2 } from "lucide-react"
+import { LayoutDashboard, FilePlus2, Settings, Bell, Hexagon, Moon, Sun, ClipboardList, Stamp, ListChecks } from "lucide-react"
 import { cn } from "../lib/utils"
 import { UserButton, useUser } from "@clerk/react"
 import CompletarPerfilModal from "../components/CompletarPerfilModal"
@@ -77,7 +77,6 @@ export default function DashboardLayout() {
     "Administrador del Sistema": [
       { name: "Dashboard",         href: "/app",               icon: LayoutDashboard },
       { name: "Nueva Solicitud",   href: "/app/nueva-solicitud", icon: FilePlus2 },
-      { name: "Reportes",          href: "/app/reportes",       icon: BarChart2 },
       { name: "Configuración",     href: "/app/configuracion",  icon: Settings },
     ],
     "Receptor VUS": [
