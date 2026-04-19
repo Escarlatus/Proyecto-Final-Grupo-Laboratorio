@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import { Search, Stamp, CheckCircle, XCircle, AlertCircle, X, Building2, User, GraduationCap, FileText, ShieldCheck, ArrowLeft } from "lucide-react"
+import { Search, Stamp, CheckCircle, XCircle, AlertCircle, X, Building2, User, GraduationCap, FileText, ShieldCheck, ArrowLeft, Download } from "lucide-react"
 import { useUser } from "@clerk/react"
 import { useSupabase } from "../hooks/useSupabase"
 
@@ -19,8 +19,32 @@ function DetailPanel({ request, onClose, onStatusChange }) {
   const [sigApplicant, setSigApplicant] = useState(false)
   const [sigDirector, setSigDirector] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [documents, setDocuments] = useState([])
+  const [loadingDocs, setLoadingDocs] = useState(true)
   const { user } = useUser()
   const supabase = useSupabase()
+
+  React.useEffect(() => {
+    const fetchDocs = async () => {
+      setLoadingDocs(true)
+      const { data } = await supabase
+        .from("applications_documents")
+        .select("document_id, file_name, file_path, file_type, file_size_in_bytes")
+        .eq("request_id", request.requestId)
+      setDocuments(data || [])
+      setLoadingDocs(false)
+    }
+    fetchDocs()
+  }, [request.requestId, supabase])
+
+  const downloadFile = async (filePath, fileName) => {
+    const { data, error } = await supabase.storage.from("solicitudes").createSignedUrl(filePath, 60)
+    if (error) { alert("No se pudo generar el enlace."); return }
+    const a = document.createElement("a")
+    a.href = data.signedUrl
+    a.download = fileName
+    a.click()
+  }
 
   const tabs = [
     { id: "establecimiento", label: "Establecimiento", icon: Building2 },
@@ -204,10 +228,37 @@ function DetailPanel({ request, onClose, onStatusChange }) {
           {activeTab === "documentos" && (
             <div className="space-y-3">
               <h3 className="font-semibold text-slate-900 dark:text-slate-100">Documentos Adjuntos</h3>
-              <div className="p-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                <FileText className="h-10 w-10 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
-                <p className="text-slate-500 dark:text-slate-400 text-sm">La gestión de archivos estará disponible con el módulo de almacenamiento (S3/Blob).</p>
-              </div>
+              {loadingDocs ? (
+                <div className="text-center py-8 text-slate-400 text-sm">Cargando documentos...</div>
+              ) : documents.length === 0 ? (
+                <div className="p-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
+                  <FileText className="h-10 w-10 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">No hay documentos adjuntos en este expediente.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {documents.map(doc => (
+                    <div key={doc.document_id} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg shrink-0">
+                          <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{doc.file_name}</p>
+                          <p className="text-xs text-slate-500">{doc.file_type} · {(doc.file_size_in_bytes / 1024).toFixed(0)} KB</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => downloadFile(doc.file_path, doc.file_name)}
+                        className="shrink-0 ml-3 flex items-center gap-1.5 text-xs px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Descargar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -299,35 +350,43 @@ export default function BandejaReceptor() {
           applications_request_types(type_name),
           identity_users!applicant_user_id(identity_persons(first_name, last_name)),
           registry_establishments(*),
-          registry_owners(*),
-          registry_technical_directors(*)
+          registry_owners(owner_id, street_address, sector, city, municipality, long_address,
+            identity_persons(first_name, last_name, document_type, document_number, email, phone_fixed, phone_mobile)
+          ),
+          registry_technical_directors(director_id, profession, exequatur_number, exequatur_date, street_address, sector, city, municipality,
+            identity_persons(first_name, last_name, document_type, document_number, email, phone_fixed, phone_mobile)
+          )
         `)
         .eq("request_id", req.requestId)
-        .single();
+        .single()
         
       if (data) {
-        const est = data.registry_establishments || {};
-        const own = data.registry_owners || {};
-        const dir = data.registry_technical_directors || {};
-        const usr = data.identity_users?.identity_persons || {};
+        const est = data.registry_establishments || {}
+        const own = data.registry_owners || {}
+        const ownP = own.identity_persons || {}
+        const dir = data.registry_technical_directors || {}
+        const dirP = dir.identity_persons || {}
+        const usr = data.identity_users?.identity_persons || {}
 
         setDetailData({
-          requestId: data.request_id, id: data.request_number, statusId: data.status_id,
+          requestId: data.request_id, id: data.request_number, requestNumber: data.request_number, statusId: data.status_id,
           requestType: data.applications_request_types?.type_name,
           applicantFirstName: usr.first_name || "", applicantLastName: usr.last_name || "",
           applicantObservations: data.applicant_observations, reviewerObservations: data.reviewer_observations,
-          
+
           tradeName: est.trade_name, rnc: est.rnc, permitCategory: est.permit_category_id, presentationForm: est.presentation_form_id,
           estStreet: est.street_address, estSector: est.sector, estCity: est.city, estMunicipality: est.municipality,
           estLongAddress: est.long_address, estPhoneFixed: est.phone_fixed, estPhoneMobile: est.phone_mobile, estEmail: est.email,
-          
-          ownerFirstName: own.first_name, ownerLastName: own.last_name, ownerDocType: own.document_type, ownerDocNum: own.document_number,
-          ownerEmail: own.email, ownerPhoneFixed: own.phone_fixed, ownerPhoneMobile: own.phone_mobile,
+
+          ownerFirstName: ownP.first_name, ownerLastName: ownP.last_name,
+          ownerDocType: ownP.document_type, ownerDocNum: ownP.document_number,
+          ownerEmail: ownP.email, ownerPhoneFixed: ownP.phone_fixed, ownerPhoneMobile: ownP.phone_mobile,
           ownerStreet: own.street_address, ownerSector: own.sector, ownerCity: own.city, ownerMunicipality: own.municipality,
-          
-          dirFirstName: dir.first_name, dirLastName: dir.last_name, profession: dir.profession, dirDocType: dir.document_type,
-          dirDocNum: dir.document_number, exequaturNumber: dir.exequatur_number, exequaturDate: dir.exequatur_date,
-          dirEmail: dir.email, dirPhoneFixed: dir.phone_fixed, dirPhoneMobile: dir.phone_mobile,
+
+          dirFirstName: dirP.first_name, dirLastName: dirP.last_name,
+          profession: dir.profession, dirDocType: dirP.document_type, dirDocNum: dirP.document_number,
+          exequaturNumber: dir.exequatur_number, exequaturDate: dir.exequatur_date,
+          dirEmail: dirP.email, dirPhoneFixed: dirP.phone_fixed, dirPhoneMobile: dirP.phone_mobile,
           dirStreet: dir.street_address, dirSector: dir.sector, dirCity: dir.city
         })
       }
