@@ -4,6 +4,7 @@ import DashboardLayout from './layouts/DashboardLayout'
 import Dashboard from './pages/Dashboard'
 import NuevaSolicitud from './pages/NuevaSolicitud'
 import Configuracion from './pages/Configuracion'
+import Reportes from './pages/Reportes'
 import Landing from './pages/Landing'
 import MisSolicitudes from './pages/MisSolicitudes'
 import DetalleSolicitud from './pages/DetalleSolicitud'
@@ -172,6 +173,11 @@ function App() {
           <Route path="configuracion" element={
             <ProtectedRoute allowedRoles={['Administrador del Sistema']}>
               <Configuracion />
+            </ProtectedRoute>
+          } />
+          <Route path="reportes" element={
+            <ProtectedRoute allowedRoles={['Administrador del Sistema']}>
+              <Reportes />
             </ProtectedRoute>
           } />
           <Route path="mis-solicitudes" element={

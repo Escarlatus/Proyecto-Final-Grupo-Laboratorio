@@ -73,9 +73,9 @@ export default function Configuracion() {
           supabase.from("registry_presentation_forms").select("*")
         ])
         
-        if (reqTypes) setRequestTypes(reqTypes.map(rt => ({ id: rt.request_type_id, name: rt.type_name })));
-        if (permCats) setPermitCategories(permCats.map(pc => ({ id: pc.category_id, name: pc.category_name })));
-        if (presForms) setPresentationForms(presForms.map(pf => ({ id: pf.form_id, name: pf.form_name })));
+        if (reqTypes) setRequestTypes(reqTypes.map(rt => ({ id: rt.request_type_id, name: rt.type_name, isActive: rt.is_active !== false })));
+        if (permCats) setPermitCategories(permCats.map(pc => ({ id: pc.category_id, name: pc.category_name, isActive: pc.is_active !== false })));
+        if (presForms) setPresentationForms(presForms.map(pf => ({ id: pf.form_id, name: pf.form_name, isActive: pf.is_active !== false })));
       } catch (err) { console.error("Error catálogos:", err) }
     }
 
@@ -202,7 +202,7 @@ export default function Configuracion() {
   }
 
   const handleDeleteCatalog = async (type, id) => {
-    if (!window.confirm("¿Está seguro de eliminar este elemento?")) return
+    if (!window.confirm("¿Está seguro de desactivar este elemento? No se eliminará de la base de datos.")) return
 
     let tableName = ""
     let idColumn = ""
@@ -211,13 +211,33 @@ export default function Configuracion() {
     else if (type === 'presentationForms') { tableName = "registry_presentation_forms"; idColumn = "form_id" }
 
     try {
-      const { error } = await supabase.from(tableName).delete().eq(idColumn, id)
+      const { error } = await supabase.from(tableName).update({ is_active: false }).eq(idColumn, id)
       if (error) throw error
-      if (type === 'requestTypes') setRequestTypes(prev => prev.filter(i => i.id !== id))
-      else if (type === 'permitCategories') setPermitCategories(prev => prev.filter(i => i.id !== id))
-      else if (type === 'presentationForms') setPresentationForms(prev => prev.filter(i => i.id !== id))
+      const updater = prev => prev.map(i => i.id === id ? { ...i, isActive: false } : i)
+      if (type === 'requestTypes') setRequestTypes(updater)
+      else if (type === 'permitCategories') setPermitCategories(updater)
+      else if (type === 'presentationForms') setPresentationForms(updater)
     } catch (error) {
-      alert("Error al eliminar: " + error.message)
+      alert("Error al desactivar: " + error.message)
+    }
+  }
+
+  const handleReactivateCatalog = async (type, id) => {
+    let tableName = ""
+    let idColumn = ""
+    if (type === 'requestTypes') { tableName = "applications_request_types"; idColumn = "request_type_id" }
+    else if (type === 'permitCategories') { tableName = "registry_permit_categories"; idColumn = "category_id" }
+    else if (type === 'presentationForms') { tableName = "registry_presentation_forms"; idColumn = "form_id" }
+
+    try {
+      const { error } = await supabase.from(tableName).update({ is_active: true }).eq(idColumn, id)
+      if (error) throw error
+      const updater = prev => prev.map(i => i.id === id ? { ...i, isActive: true } : i)
+      if (type === 'requestTypes') setRequestTypes(updater)
+      else if (type === 'permitCategories') setPermitCategories(updater)
+      else if (type === 'presentationForms') setPresentationForms(updater)
+    } catch (error) {
+      alert("Error al reactivar: " + error.message)
     }
   }
 
