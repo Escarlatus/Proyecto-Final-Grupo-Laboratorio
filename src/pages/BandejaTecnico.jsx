@@ -59,8 +59,20 @@ function DetailPanel({ request, onClose, onStatusChange }) {
         .from("applications_requests")
         .update({ reviewer_observations: observations })
         .eq("request_id", request.requestId)
-      if (!error) { setNoteSaved(true); setTimeout(() => setNoteSaved(false), 3000) }
-      else alert("Error al guardar nota: " + error.message)
+      if (!error) {
+        // Auditoría directa como respaldo al trigger
+        await supabase.from("system_audit_logs").insert({
+          action: "Observación Registrada",
+          entity_name: "applications_requests",
+          entity_id: String(request.requestId),
+          user_id: user?.id || "Sistema",
+          new_values: observations
+        })
+        setNoteSaved(true)
+        setTimeout(() => setNoteSaved(false), 3000)
+      } else {
+        alert("Error al guardar nota: " + error.message)
+      }
     } catch { alert("Error de conexión.") }
     setSavingNote(false)
   }
@@ -113,8 +125,23 @@ function DetailPanel({ request, onClose, onStatusChange }) {
           reviewed_at: new Date().toISOString()
         })
         .eq("request_id", request.requestId)
-      if (!error) { onStatusChange(); onClose() }
-      else alert("Error al actualizar el estado: " + error.message)
+      if (!error) {
+        // Auditoría directa como respaldo al trigger
+        const oldStatus = STATUS_CONFIG[request.statusId]?.label || request.statusId
+        const newStatus = STATUS_CONFIG[newStatusId]?.label || newStatusId
+        await supabase.from("system_audit_logs").insert({
+          action: "Cambio de Estado",
+          entity_name: "applications_requests",
+          entity_id: String(request.requestId),
+          user_id: user?.id || "Sistema",
+          old_values: `status: ${oldStatus}`,
+          new_values: `status: ${newStatus}`
+        })
+        onStatusChange()
+        onClose()
+      } else {
+        alert("Error al actualizar el estado: " + error.message)
+      }
     } catch { alert("Error de conexión.") }
     setSaving(false)
   }
