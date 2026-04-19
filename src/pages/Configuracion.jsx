@@ -159,58 +159,65 @@ export default function Configuracion() {
   }
 
   const handleSaveCatalog = async () => {
+    if (!catalogItem.name.trim()) { alert("El nombre no puede estar vacío."); return }
     setIsLoadingCatalog(true)
     try {
-      const isNew = catalogItem.id === null;
-      let tableName = "";
-      let idColumn = "";
-      let nameColumn = "";
+      const isNew = catalogItem.id === null
+      let tableName = ""
+      let idColumn = ""
+      let nameColumn = ""
 
       if (catalogContext.type === 'requestTypes') {
-        tableName = "applications_request_types";
-        idColumn = "request_type_id";
-        nameColumn = "type_name";
+        tableName = "applications_request_types"; idColumn = "request_type_id"; nameColumn = "type_name"
       } else if (catalogContext.type === 'permitCategories') {
-        tableName = "registry_permit_categories";
-        idColumn = "permit_category_id";
-        nameColumn = "category_name";
+        tableName = "registry_permit_categories"; idColumn = "category_id"; nameColumn = "category_name"
       } else if (catalogContext.type === 'presentationForms') {
-        tableName = "applications_presentation_forms";
-        idColumn = "presentation_form_id";
-        nameColumn = "form_name";
+        tableName = "registry_presentation_forms"; idColumn = "form_id"; nameColumn = "form_name"
       }
 
       if (isNew) {
-        await supabase.from(tableName).insert({ [nameColumn]: catalogItem.name });
+        const { data: inserted, error } = await supabase
+          .from(tableName).insert({ [nameColumn]: catalogItem.name }).select().single()
+        if (error) throw error
+        const newItem = { id: inserted[idColumn], name: inserted[nameColumn] }
+        if (catalogContext.type === 'requestTypes') setRequestTypes(prev => [...prev, newItem])
+        else if (catalogContext.type === 'permitCategories') setPermitCategories(prev => [...prev, newItem])
+        else if (catalogContext.type === 'presentationForms') setPresentationForms(prev => [...prev, newItem])
       } else {
-        await supabase.from(tableName).update({ [nameColumn]: catalogItem.name }).eq(idColumn, catalogItem.id);
+        const { error } = await supabase
+          .from(tableName).update({ [nameColumn]: catalogItem.name }).eq(idColumn, catalogItem.id)
+        if (error) throw error
+        const updater = prev => prev.map(i => i.id === catalogItem.id ? { ...i, name: catalogItem.name } : i)
+        if (catalogContext.type === 'requestTypes') setRequestTypes(updater)
+        else if (catalogContext.type === 'permitCategories') setPermitCategories(updater)
+        else if (catalogContext.type === 'presentationForms') setPresentationForms(updater)
       }
 
-      // Refresh data (lazy way: reload window or just re-fetch)
-      window.location.reload(); 
-      setIsCatalogModalOpen(false);
+      setIsCatalogModalOpen(false)
     } catch (error) {
-      alert("Error de conexión: " + error.message);
+      alert("Error: " + error.message)
     } finally {
-      setIsLoadingCatalog(false);
+      setIsLoadingCatalog(false)
     }
   }
 
   const handleDeleteCatalog = async (type, id) => {
-    if (!window.confirm("¿Está seguro de eliminar este elemento?")) return;
-    
-    let tableName = "";
-    let idColumn = "";
-    if (type === 'requestTypes') { tableName = "applications_request_types"; idColumn = "request_type_id"; }
-    else if (type === 'permitCategories') { tableName = "registry_permit_categories"; idColumn = "category_id"; }
-    else if (type === 'presentationForms') { tableName = "registry_presentation_forms"; idColumn = "form_id"; }
+    if (!window.confirm("¿Está seguro de eliminar este elemento?")) return
+
+    let tableName = ""
+    let idColumn = ""
+    if (type === 'requestTypes') { tableName = "applications_request_types"; idColumn = "request_type_id" }
+    else if (type === 'permitCategories') { tableName = "registry_permit_categories"; idColumn = "category_id" }
+    else if (type === 'presentationForms') { tableName = "registry_presentation_forms"; idColumn = "form_id" }
 
     try {
-      const { error } = await supabase.from(tableName).delete().eq(idColumn, id);
-      if (error) throw error;
-      window.location.reload();
+      const { error } = await supabase.from(tableName).delete().eq(idColumn, id)
+      if (error) throw error
+      if (type === 'requestTypes') setRequestTypes(prev => prev.filter(i => i.id !== id))
+      else if (type === 'permitCategories') setPermitCategories(prev => prev.filter(i => i.id !== id))
+      else if (type === 'presentationForms') setPresentationForms(prev => prev.filter(i => i.id !== id))
     } catch (error) {
-      alert("Error al eliminar: " + error.message);
+      alert("Error al eliminar: " + error.message)
     }
   }
 
