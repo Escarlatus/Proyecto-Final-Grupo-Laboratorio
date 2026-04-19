@@ -86,7 +86,7 @@ export default function DetalleSolicitud() {
         const { data } = await supabase
           .from("applications_requests")
           .select(`
-            request_id, request_number, status_id, applicant_observations, submitted_at, reviewed_at,
+            request_id, request_number, status_id, applicant_observations, reviewer_observations, submitted_at, reviewed_at,
             applications_request_types(type_name),
             identity_users!applicant_user_id(identity_persons(first_name, last_name)),
             registry_establishments(*),
@@ -113,6 +113,7 @@ export default function DetalleSolicitud() {
             requestType: data.applications_request_types?.type_name,
             applicantFirstName: usr.first_name || "", applicantLastName: usr.last_name || "",
             applicantObservations: data.applicant_observations,
+            reviewerObservations: data.reviewer_observations || null,
             submittedAt: data.submitted_at, reviewedAt: data.reviewed_at,
 
             tradeName: est.trade_name, rnc: est.rnc,
@@ -440,6 +441,22 @@ export default function DetalleSolicitud() {
 
         {activeTab === "observaciones" && (
           <div className="space-y-4">
+            {/* Reviewer notes — shown first and prominently */}
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-amber-500" /> Notas del Revisor Técnico
+              </h3>
+              {detail.reviewerObservations ? (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4">
+                  <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap">{detail.reviewerObservations}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400 dark:text-slate-500 italic bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
+                  El revisor técnico aún no ha dejado notas en este expediente.
+                </p>
+              )}
+            </div>
+            {/* Applicant's own notes */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
               <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" /> Tus Observaciones
@@ -464,6 +481,7 @@ export default function DetalleSolicitud() {
             </div>
           </div>
         )}
+
       </div>
     </div>
   )

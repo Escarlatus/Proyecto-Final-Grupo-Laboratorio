@@ -42,12 +42,28 @@ function InfoRow({ label, value }) {
 
 function DetailPanel({ request, onClose, onStatusChange }) {
   const [activeTab, setActiveTab] = useState("establecimiento")
-  const [observations, setObservations] = useState("")
+  const [observations, setObservations] = useState(request.reviewerObservations || "")
   const [saving, setSaving] = useState(false)
+  const [savingNote, setSavingNote] = useState(false)
+  const [noteSaved, setNoteSaved] = useState(false)
   const [documents, setDocuments] = useState([])
   const [loadingDocs, setLoadingDocs] = useState(true)
   const { user } = useUser()
   const supabase = useSupabase()
+
+  const saveNote = async () => {
+    setSavingNote(true)
+    setNoteSaved(false)
+    try {
+      const { error } = await supabase
+        .from("applications_requests")
+        .update({ reviewer_observations: observations })
+        .eq("request_id", request.requestId)
+      if (!error) { setNoteSaved(true); setTimeout(() => setNoteSaved(false), 3000) }
+      else alert("Error al guardar nota: " + error.message)
+    } catch { alert("Error de conexión.") }
+    setSavingNote(false)
+  }
 
   React.useEffect(() => {
     const fetchDocs = async () => {
@@ -266,22 +282,33 @@ function DetailPanel({ request, onClose, onStatusChange }) {
           )}
         </div>
 
+        {/* Sticky Notes Panel — independent of status change */}
+        <div className="border-t border-slate-200 dark:border-slate-800 bg-amber-50/60 dark:bg-amber-900/10 p-4 space-y-2">
+          <label className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wide flex items-center gap-1.5">
+            <MessageSquare className="h-3.5 w-3.5" /> Notas del revisor
+          </label>
+          <textarea
+            value={observations}
+            onChange={e => setObservations(e.target.value)}
+            rows={3}
+            placeholder="Escribe una nota o comentario visible para el solicitante..."
+            className="w-full border border-amber-200 dark:border-amber-800/60 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white dark:bg-slate-900 dark:text-slate-100 transition-colors"
+          />
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-amber-700 dark:text-amber-500">El solicitante puede ver estas notas en su expediente.</p>
+            <button
+              onClick={saveNote}
+              disabled={savingNote}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60"
+            >
+              {savingNote ? "Guardando..." : noteSaved ? "✓ Guardado" : "Guardar nota"}
+            </button>
+          </div>
+        </div>
+
         {/* Action Footer */}
         {!isLocked && (
-          <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
-            {/* Inline observations textarea */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                Observaciones del Revisor <span className="text-orange-500">(requerido para Devolver o Rechazar)</span>
-              </label>
-              <textarea
-                value={observations}
-                onChange={e => setObservations(e.target.value)}
-                rows={3}
-                placeholder="Describa las correcciones requeridas o el motivo de la resolución..."
-                className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#0F539C] bg-white dark:bg-slate-900 dark:text-slate-100 transition-colors"
-              />
-            </div>
+          <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
             <div className="flex flex-wrap gap-2">
               {request.statusId === 1 && (
                 <button onClick={() => handleAction(2, "Marcar En Revisión")} disabled={saving}
@@ -379,7 +406,7 @@ export default function BandejaTecnico() {
       const { data, error } = await supabase
         .from("applications_requests")
         .select(`
-          request_id, request_number, status_id, applicant_observations,
+          request_id, request_number, status_id, applicant_observations, reviewer_observations,
           applications_request_types(type_name),
           identity_users!applicant_user_id(identity_persons(first_name, last_name)),
           registry_establishments(*),
@@ -406,7 +433,7 @@ export default function BandejaTecnico() {
           requestType: data.applications_request_types?.type_name,
           applicantFirstName: usr.first_name || "", applicantLastName: usr.last_name || "",
           applicantObservations: data.applicant_observations,
-          reviewerObservations: null,
+          reviewerObservations: data.reviewer_observations || "",
           
           tradeName: est.trade_name, rnc: est.rnc,
           permitCategory: est.permit_category_id, presentationForm: est.presentation_form_id,
