@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import { Building, FileText, CheckCircle2, AlertTriangle, Plus, ClipboardList, Download } from "lucide-react"
+import { Building, FileText, CheckCircle2, AlertTriangle, Plus, ClipboardList, Download, RefreshCw } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/Card"
 import { Link } from "react-router-dom"
@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [requests, setRequests] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -51,6 +52,8 @@ export default function Dashboard() {
       } catch (error) { console.error("Error fetching dashboard data:", error) }
     };
     fetchData();
+    const interval = setInterval(fetchData, 30000); // auto-refresh every 30s
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

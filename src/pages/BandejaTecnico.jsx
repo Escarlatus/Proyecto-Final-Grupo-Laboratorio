@@ -81,31 +81,25 @@ function DetailPanel({ request, onClose, onStatusChange }) {
 
   const handleAction = async (newStatusId, label) => {
     if (!observations.trim() && [4, 6].includes(newStatusId)) {
-      alert("Debes escribir una observación o motivo antes de " + label)
+      alert("Debes escribir una observación antes de " + label)
       return
     }
     if (!confirm(`¿Confirmar acción: "${label}"?`)) return
     setSaving(true)
     try {
-      const { data: dbUser } = await supabase.from("identity_users").select("user_id").eq("clerk_user_id", user.id).single();
-      
+      const { data: dbUser } = await supabase.from("identity_users").select("user_id").eq("clerk_user_id", user.id).single()
       const { error } = await supabase
         .from("applications_requests")
         .update({
           status_id: newStatusId,
-          reviewer_user_id: dbUser ? dbUser.user_id : null
+          reviewer_user_id: dbUser ? dbUser.user_id : null,
+          reviewer_observations: observations,
+          reviewed_at: new Date().toISOString()
         })
         .eq("request_id", request.requestId)
-
-      if (!error) {
-        onStatusChange()
-        onClose()
-      } else {
-        alert("Error al actualizar el estado: " + error.message)
-      }
-    } catch {
-      alert("Error de conexión.")
-    }
+      if (!error) { onStatusChange(); onClose() }
+      else alert("Error al actualizar el estado: " + error.message)
+    } catch { alert("Error de conexión.") }
     setSaving(false)
   }
 
@@ -274,8 +268,20 @@ function DetailPanel({ request, onClose, onStatusChange }) {
 
         {/* Action Footer */}
         {!isLocked && (
-          <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Escribe tus observaciones en la pestaña correspondiente antes de ejecutar una acción.</p>
+          <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+            {/* Inline observations textarea */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                Observaciones del Revisor <span className="text-orange-500">(requerido para Devolver o Rechazar)</span>
+              </label>
+              <textarea
+                value={observations}
+                onChange={e => setObservations(e.target.value)}
+                rows={3}
+                placeholder="Describa las correcciones requeridas o el motivo de la resolución..."
+                className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#0F539C] bg-white dark:bg-slate-900 dark:text-slate-100 transition-colors"
+              />
+            </div>
             <div className="flex flex-wrap gap-2">
               {request.statusId === 1 && (
                 <button onClick={() => handleAction(2, "Marcar En Revisión")} disabled={saving}
@@ -436,8 +442,9 @@ export default function BandejaTecnico() {
   const filtered = requests.filter(r => {
     const matchSearch = r.id?.toLowerCase().includes(search.toLowerCase()) || r.establishment?.toLowerCase().includes(search.toLowerCase())
     const matchStatus = filterStatus === "all" || r.status === filterStatus
-    const isPending = r.status === "borrador" || r.status === "en_revision"
-    const matchView = activeTabView === "pendientes" ? isPending : (!isPending && r.status !== "aprobada")
+    // Observada stays in pendientes — reviewer still needs to follow up
+    const isActive = ["borrador", "en_revision", "observada"].includes(r.status)
+    const matchView = activeTabView === "pendientes" ? isActive : (!isActive)
     return matchSearch && matchStatus && matchView
   })
 
