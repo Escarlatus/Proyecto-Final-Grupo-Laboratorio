@@ -2,13 +2,15 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ─── Secretos (configúralos en Supabase Dashboard > Edge Functions > Secrets) ───
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
+const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 // ─── Personaliza estos valores ────────────────────────────────────────────────
-const FROM_EMAIL = "Laboratorio SRSPM <notificaciones@tudominio.com>"; // ← cambia al dominio verificado en Resend
-const APP_URL = "https://tu-app.vercel.app"; // ← cambia a la URL de producción
+// Brevo: el FROM_EMAIL debe ser el email con el que te registraste en Brevo (verificado automáticamente)
+const FROM_NAME = "Laboratorio SRSPM";
+const FROM_EMAIL = "pascualjoshua704@gmail.com"; // ← tu email de Brevo (el que usaste para registrarte)
+const APP_URL = "https://tu-app.vercel.app"; // ← cambiar a la URL de producción
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -223,12 +225,12 @@ serve(async (req) => {
     const applicantName = `${person.first_name} ${person.last_name}`;
     const applicantEmail = person.email;
 
-    // 4. Construir y enviar el email con Resend
+    // 4. Construir y enviar el email con Brevo
     const emailPayload = {
-      from: FROM_EMAIL,
-      to: [applicantEmail],
+      sender: { name: FROM_NAME, email: FROM_EMAIL },
+      to: [{ email: applicantEmail, name: applicantName }],
       subject: `${STATUS_CONFIG[record.status_id]?.icon ?? "📬"} Actualización de ${record.request_number}`,
-      html: buildEmailHtml({
+      htmlContent: buildEmailHtml({
         applicantName,
         requestNumber: record.request_number,
         statusId: record.status_id,
@@ -237,19 +239,19 @@ serve(async (req) => {
       }),
     };
 
-    const resendRes = await fetch("https://api.resend.com/emails", {
+    const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "api-key": BREVO_API_KEY,
       },
       body: JSON.stringify(emailPayload),
     });
 
-    const resendData = await resendRes.json();
+    const brevoData = await brevoRes.json();
 
-    if (!resendRes.ok) {
-      throw new Error(`Resend API error: ${JSON.stringify(resendData)}`);
+    if (!brevoRes.ok) {
+      throw new Error(`Brevo API error: ${JSON.stringify(brevoData)}`);
     }
 
     console.log(
@@ -257,7 +259,7 @@ serve(async (req) => {
     );
 
     return new Response(
-      JSON.stringify({ success: true, emailId: resendData.id }),
+      JSON.stringify({ success: true, messageId: brevoData.messageId }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
