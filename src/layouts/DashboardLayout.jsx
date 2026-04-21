@@ -136,7 +136,7 @@ export default function DashboardLayout() {
           <Link to="/" className="flex items-center gap-3 text-primary relative z-10 hover:opacity-80 transition-opacity">
             <Hexagon className="h-7 w-7 fill-primary dark:fill-[#9FD0FD]" />
             <div className="flex flex-col">
-              <span className="font-display font-extrabold text-[1.15rem] leading-none tracking-tight text-slate-900 dark:text-white">SASRL</span>
+              <span className="font-display font-extrabold text-[1.15rem] leading-none tracking-tight text-slate-900 dark:text-white">SIRELAF</span>
               <span className="text-[10px] font-semibold tracking-widest text-slate-500 dark:text-slate-400 uppercase mt-0.5">DIGEMAPS</span>
             </div>
           </Link>

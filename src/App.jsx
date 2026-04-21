@@ -40,7 +40,7 @@ function AuthGuard({ children }) {
           className="w-64 h-64 object-cover rounded-2xl mx-auto mb-6 shadow-lg"
         />
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Haz sido baneado bro</h1>
-        <p className="text-slate-500 dark:text-slate-400">Tu cuenta ha sido desactivada por un administrador. Contacta al equipo del SASRL para más información.</p>
+        <p className="text-slate-500 dark:text-slate-400">Tu cuenta ha sido desactivada por un administrador. Contacta al equipo del SIRELAF para más información.</p>
       </div>
     </div>
   )

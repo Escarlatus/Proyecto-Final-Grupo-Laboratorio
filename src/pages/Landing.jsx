@@ -30,7 +30,7 @@ export default function Landing() {
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 text-primary">
             <Hexagon className="h-6 w-6 fill-primary/20 dark:fill-[#9FD0FD]/20" />
-            <span className="font-display font-bold text-lg tracking-tight text-slate-900 dark:text-white">SASRL</span>
+            <span className="font-display font-bold text-lg tracking-tight text-slate-900 dark:text-white">SIRELAF</span>
           </div>
           <nav className="hidden md:flex gap-8 text-sm font-medium text-slate-600 dark:text-slate-300">
             <a href="#inicio" className="hover:text-[#0F539C] dark:hover:text-[#9FD0FD] transition-colors">Inicio</a>
@@ -297,7 +297,7 @@ export default function Landing() {
           <div>
             <div className="flex justify-center md:justify-start items-center gap-2 text-slate-900 dark:text-white mb-2">
               <Hexagon className="h-5 w-5 fill-slate-200 dark:fill-slate-800" />
-              <span className="font-display font-bold text-lg tracking-tight">SASRL</span>
+              <span className="font-display font-bold text-lg tracking-tight">SIRELAF</span>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400">© 2026 Ministerio de Salud Pública. Todos los derechos reservados.</p>
           </div>
