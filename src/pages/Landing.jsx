@@ -2,8 +2,75 @@ import React, { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { Hexagon, ArrowRight, ShieldCheck, Activity, FileText, Moon, Sun } from "lucide-react"
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react"
+import { X } from "lucide-react"
+
+const LEGAL_TEXTS = {
+  terms: {
+    title: "Términos de Servicio",
+    content: (
+      <>
+        <p className="mb-4">Bienvenido al Sistema de Registro de Laboratorios Fabricantes (SIRELAF). Al acceder a este portal, usted acepta cumplir con los siguientes términos y condiciones de uso.</p>
+        <h4 className="font-bold mb-2">1. Uso del Portal</h4>
+        <p className="mb-4">Este portal es exclusivo para el registro y habilitación de establecimientos bajo la normativa de DIGEMAPS. Cualquier uso indebido de la información o intentos de acceso no autorizado serán sancionados según las leyes de la República Dominicana.</p>
+        <h4 className="font-bold mb-2">2. Responsabilidad del Usuario</h4>
+        <p className="mb-4">El usuario es responsable de la veracidad de los documentos cargados. La falsificación de documentos conlleva la cancelación inmediata del proceso de registro y posibles acciones legales.</p>
+      </>
+    )
+  },
+  privacy: {
+    title: "Privacidad de Datos",
+    content: (
+      <>
+        <p className="mb-4">En cumplimiento con la Ley No. 172-13 sobre Protección de Datos de Carácter Personal, el Ministerio de Salud Pública garantiza la confidencialidad de la información suministrada.</p>
+        <h4 className="font-bold mb-2">Uso de la Información</h4>
+        <p className="mb-4">Sus datos personales y técnicos serán utilizados exclusivamente para fines de evaluación y habilitación institucional. No serán compartidos con terceros sin su consentimiento expreso, salvo por requerimiento de autoridad competente.</p>
+      </>
+    )
+  },
+  support: {
+    title: "Soporte DIGEMAPS",
+    content: (
+      <>
+        <p className="mb-4">¿Necesita ayuda con su trámite? Nuestro equipo técnico está disponible para asistirle.</p>
+        <div className="space-y-2 text-sm">
+          <p><strong>📍 Dirección:</strong> Av. Dr. Héctor Homero Hernández esq. Av. Tiradentes, Santo Domingo.</p>
+          <p><strong>📞 Teléfono:</strong> (809) 541-3121 ext. 2345</p>
+          <p><strong>📧 Correo:</strong> soporte.sirelaf@salud.gob.do</p>
+          <p><strong>⏰ Horario:</strong> Lunes a Viernes, 8:00 AM - 4:00 PM</p>
+        </div>
+      </>
+    )
+  }
+}
+
+function LegalModal({ isOpen, type, onClose }) {
+  if (!isOpen) return null;
+  const data = LEGAL_TEXTS[type] || {};
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white">{data.title}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+            <X className="h-5 w-5 text-slate-500" />
+          </button>
+        </div>
+        <div className="p-8 max-h-[70vh] overflow-y-auto text-slate-600 dark:text-slate-300 leading-relaxed font-sans">
+          {data.content}
+        </div>
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end">
+          <button onClick={onClose} className="px-6 py-2 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity">
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Landing() {
+  const [activeLegal, setActiveLegal] = useState(null)
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("theme") === "dark" || 
@@ -289,7 +356,13 @@ export default function Landing() {
             </div>
           </div>
         </section>
-      </main>
+
+        {/* Legal Modal Component */}
+        <LegalModal 
+          isOpen={!!activeLegal} 
+          type={activeLegal} 
+          onClose={() => setActiveLegal(null)} 
+        />
 
       {/* Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-12 mt-auto transition-colors duration-300">
@@ -302,9 +375,9 @@ export default function Landing() {
             <p className="text-sm text-slate-500 dark:text-slate-400">© 2026 Ministerio de Salud Pública. Todos los derechos reservados.</p>
           </div>
           <div className="flex gap-6 text-sm text-slate-500 dark:text-slate-400">
-            <a href="#" className="hover:text-[#0F539C] dark:hover:text-[#9FD0FD] transition-colors">Términos de servicio</a>
-            <a href="#" className="hover:text-[#0F539C] dark:hover:text-[#9FD0FD] transition-colors">Privacidad de datos</a>
-            <a href="#" className="hover:text-[#0F539C] dark:hover:text-[#9FD0FD] transition-colors">Soporte DIGEMAPS</a>
+            <button onClick={() => setActiveLegal('terms')} className="hover:text-[#0F539C] dark:hover:text-[#9FD0FD] transition-colors">Términos de servicio</button>
+            <button onClick={() => setActiveLegal('privacy')} className="hover:text-[#0F539C] dark:hover:text-[#9FD0FD] transition-colors">Privacidad de datos</button>
+            <button onClick={() => setActiveLegal('support')} className="hover:text-[#0F539C] dark:hover:text-[#9FD0FD] transition-colors">Soporte DIGEMAPS</button>
           </div>
         </div>
       </footer>
