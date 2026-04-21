@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
-import { Hexagon, ArrowRight, ShieldCheck, Activity, FileText, Moon, Sun } from "lucide-react"
+import { Hexagon, ShieldCheck, Activity, FileText, Moon, Sun, X } from "lucide-react"
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react"
-import { X } from "lucide-react"
 
 const LEGAL_TEXTS = {
   terms: {
